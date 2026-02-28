@@ -46,9 +46,25 @@ class VideoStore extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     final jsonString = prefs.getString(_storageKey);
     if (jsonString != null) {
-      final List<dynamic> jsonList = json.decode(jsonString);
-      _videos = jsonList.map((e) => VideoItem.fromJson(e)).toList();
-      notifyListeners();
+      try {
+        final List<dynamic> jsonList = json.decode(jsonString);
+        List<VideoItem> loadedVideos = jsonList.map((e) => VideoItem.fromJson(e)).toList();
+        _videos = loadedVideos.map((video) {
+          if (video.name.isEmpty || video.name.contains(RegExp(r'^\d+$'))) {
+            final pathParts = video.path.split(RegExp(r'[/\\]'));
+            return VideoItem(
+              id: video.id,
+              path: video.path,
+              name: pathParts.isNotEmpty ? pathParts.last : '未命名视频',
+              position: video.position,
+            );
+          }
+          return video;
+        }).toList();
+        notifyListeners();
+      } catch (e) {
+        await prefs.remove(_storageKey);
+      }
     }
   }
 
