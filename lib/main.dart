@@ -135,7 +135,9 @@ class _HomeScreenState extends State<HomeScreen> {
     if (result != null && result.files.isNotEmpty) {
       final file = result.files.first;
       if (file.path != null) {
-        final fileName = file.path!.split('/').last.split('\\').last;
+        final pathParts = file.path!.split(RegExp(r'[/\\]'));
+        final fileName = pathParts.isNotEmpty ? pathParts.last : '未命名视频';
+        
         final video = VideoItem(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
           path: file.path!,
