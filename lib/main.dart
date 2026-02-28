@@ -135,10 +135,11 @@ class _HomeScreenState extends State<HomeScreen> {
     if (result != null && result.files.isNotEmpty) {
       final file = result.files.first;
       if (file.path != null) {
+        final fileName = file.path!.split('/').last.split('\\').last;
         final video = VideoItem(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
           path: file.path!,
-          name: file.name,
+          name: fileName,
           position: 0,
         );
         
@@ -409,12 +410,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
   @override
   void dispose() {
     if (_videoPlayerController != null) {
+      _videoPlayerController!.pause();
       final position = _videoPlayerController!.value.position.inMilliseconds;
-      context.read<VideoStore>().updateVideoPosition(widget.video.id, position);
       _videoPlayerController!.removeListener(_onVideoPositionChanged);
+      context.read<VideoStore>().updateVideoPosition(widget.video.id, position);
     }
-    _videoPlayerController?.dispose();
     _chewieController?.dispose();
+    _videoPlayerController?.dispose();
     super.dispose();
   }
 
