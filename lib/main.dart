@@ -14,8 +14,6 @@ class AppTheme {
   static const Color backgroundColor = Color(0xFFFFF8E1); // 浅橘黄背景色
   static const Color cardColor = Color(0xFFFFECB3); // 卡片颜色
   static const Color textColor = Color(0xFF5D4037); // 文字颜色
-  static const Color darkBackgroundColor = Color(0xFF3E2723); // 深色背景（播放器）
-  static const Color darkCardColor = Color(0xFF4E342E); // 深色卡片
 }
 
 class VideoItem {
@@ -621,7 +619,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.darkBackgroundColor,
+      backgroundColor: AppTheme.backgroundColor,
       appBar: AppBar(
         backgroundColor: AppTheme.primaryColor,
         foregroundColor: AppTheme.textColor,
@@ -668,14 +666,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
           // 字幕列表
           Expanded(
             child: Container(
-              color: AppTheme.darkCardColor,
+              color: AppTheme.backgroundColor,
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
                   const Text(
                     '字幕',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: AppTheme.textColor,
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
                     ),
