@@ -13,12 +13,16 @@ class VideoItem {
   final String path;
   final String name;
   int position;
+  int duration;
+  String? thumbnailBase64;
 
   VideoItem({
     required this.id,
     required this.path,
     required this.name,
     this.position = 0,
+    this.duration = 0,
+    this.thumbnailBase64,
   });
 
   Map<String, dynamic> toJson() => {
@@ -26,6 +30,8 @@ class VideoItem {
     'path': path,
     'name': name,
     'position': position,
+    'duration': duration,
+    'thumbnailBase64': thumbnailBase64,
   };
 
   factory VideoItem.fromJson(Map<String, dynamic> json) => VideoItem(
@@ -33,6 +39,8 @@ class VideoItem {
     path: json['path'],
     name: json['name'],
     position: json['position'] ?? 0,
+    duration: json['duration'] ?? 0,
+    thumbnailBase64: json['thumbnailBase64'],
   );
 }
 
@@ -158,11 +166,26 @@ class _HomeScreenState extends State<HomeScreen> {
       if (file != null) {
         final fileName = asset.title ?? '视频_${DateTime.now().millisecondsSinceEpoch}';
         
+        // 获取缩略图（200x200）
+        final thumbnailData = await asset.thumbnailDataWithSize(
+          const ThumbnailSize(200, 200),
+          quality: 80,
+        );
+        String? thumbnailBase64;
+        if (thumbnailData != null) {
+          thumbnailBase64 = base64Encode(thumbnailData);
+        }
+        
+        // 获取视频时长（秒转换为毫秒）
+        final duration = asset.duration * 1000;
+        
         final video = VideoItem(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
           path: file.path,
           name: fileName,
           position: 0,
+          duration: duration,
+          thumbnailBase64: thumbnailBase64,
         );
         
         if (mounted) {
@@ -300,26 +323,57 @@ class _VideoGridItem extends StatelessWidget {
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
                     child: Container(
                       color: Colors.black,
-                      child: const Center(
-                        child: Icon(Icons.play_circle_fill, size: 50, color: Colors.white70),
+                      child: video.thumbnailBase64 != null
+                          ? Image.memory(
+                              base64Decode(video.thumbnailBase64!),
+                              fit: BoxFit.cover,
+                            )
+                          : const Center(
+                              child: Icon(Icons.play_circle_fill, size: 50, color: Colors.white70),
+                            ),
+                    ),
+                  ),
+                  // 时间显示 已观看/总时长
+                  Positioned(
+                    bottom: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        '${_formatDuration(video.position)}/${_formatDuration(video.duration)}',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
                   ),
-                  if (video.position > 0)
+                  // 进度条
+                  if (video.duration > 0)
                     Positioned(
-                      bottom: 8,
-                      right: 8,
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        height: 3,
                         decoration: BoxDecoration(
-                          color: Colors.black54,
-                          borderRadius: BorderRadius.circular(4),
+                          color: Colors.black38,
+                          borderRadius: const BorderRadius.vertical(
+                            bottom: Radius.circular(12),
+                          ),
                         ),
-                        child: Text(
-                          _formatDuration(video.position),
-                          style: const TextStyle(
-                            fontSize: 10,
-                            color: Colors.white,
+                        child: FractionallySizedBox(
+                          alignment: Alignment.centerLeft,
+                          widthFactor: video.position / video.duration,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.deepPurple,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
                           ),
                         ),
                       ),
@@ -333,7 +387,7 @@ class _VideoGridItem extends StatelessWidget {
                 padding: const EdgeInsets.all(8),
                 child: Text(
                   video.name,
-                  maxLines: 3,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 12,
@@ -350,6 +404,7 @@ class _VideoGridItem extends StatelessWidget {
   }
 
   String _formatDuration(int milliseconds) {
+    if (milliseconds <= 0) return '00:00';
     final duration = Duration(milliseconds: milliseconds);
     final hours = duration.inHours;
     final minutes = duration.inMinutes.remainder(60);
@@ -423,6 +478,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
         allowFullScreen: true,
         allowMuting: true,
         showControls: true,
+        materialProgressColors: ChewieProgressColors(
+          playedColor: Colors.deepPurple,
+          handleColor: Colors.white,
+          backgroundColor: Colors.white38,
+          bufferedColor: Colors.white54,
+        ),
         placeholder: Container(
           color: Colors.black,
           child: const Center(
@@ -516,6 +577,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
     super.dispose();
   }
 
+  void _togglePlayPause() {
+    if (_videoPlayerController != null) {
+      if (_videoPlayerController!.value.isPlaying) {
+        _videoPlayerController!.pause();
+      } else {
+        _videoPlayerController!.play();
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -553,10 +624,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   ),
                 )
               : _chewieController != null
-                  ? Center(
-                      child: AspectRatio(
-                        aspectRatio: 16 / 9,
-                        child: Chewie(controller: _chewieController!),
+                  ? GestureDetector(
+                      onDoubleTap: _togglePlayPause,
+                      child: Center(
+                        child: AspectRatio(
+                          aspectRatio: 16 / 9,
+                          child: Chewie(controller: _chewieController!),
+                        ),
                       ),
                     )
                   : const Center(
