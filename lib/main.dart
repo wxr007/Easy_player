@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:file_picker/file_picker.dart';
+import 'package:wechat_assets_picker/wechat_assets_picker.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -138,28 +138,30 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _requestPermissions() async {
     await [
       Permission.storage,
-      Permission.manageExternalStorage,
+      Permission.photos,
+      Permission.videos,
     ].request();
   }
 
   Future<void> _addVideo() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm', '3gp'],
-      allowMultiple: false,
+    final List<AssetEntity>? result = await AssetPicker.pickAssets(
+      context,
+      pickerConfig: const AssetPickerConfig(
+        maxAssets: 1,
+        requestType: RequestType.video,
+      ),
     );
 
-    if (result != null && result.files.isNotEmpty) {
-      final file = result.files.first;
-      if (file.path != null) {
-        final realFileName = file.name ?? '未知视频_${DateTime.now().millisecondsSinceEpoch}';
-        // final pathParts = file.path!.split('/');
-        // final fileName = pathParts.isNotEmpty ? pathParts.last : '视频_${DateTime.now().millisecondsSinceEpoch}';
+    if (result != null && result.isNotEmpty) {
+      final asset = result.first;
+      final file = await asset.file;
+      if (file != null) {
+        final fileName = asset.title ?? '视频_${DateTime.now().millisecondsSinceEpoch}';
         
         final video = VideoItem(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
-          path: file.path!,
-          name: file.path!,
+          path: file.path,
+          name: fileName,
           position: 0,
         );
         
@@ -245,8 +247,8 @@ class _HomeScreenState extends State<HomeScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('删除视频'),
-        content: Text('确定要删除 "${video.name}" 吗？'),
+        title: const Text('移除视频'),
+        content: Text('确定要移除 "${video.name}" 吗？'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -257,7 +259,7 @@ class _HomeScreenState extends State<HomeScreen> {
               context.read<VideoStore>().removeVideo(video.id);
               Navigator.pop(context);
             },
-            child: const Text('删除', style: TextStyle(color: Colors.red)),
+            child: const Text('移除', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -394,7 +396,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       final videoFile = File(widget.video.path);
       if (!await videoFile.exists()) {
         setState(() {
-          _errorMessage = '文件不存在或已被删除';
+          _errorMessage = '文件不存在或已被移除';
           _isLoading = false;
         });
         return;
