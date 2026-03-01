@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:file_picker/file_picker.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -143,27 +143,25 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _addVideo() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.video,
-      allowMultiple: false,
+    const typeGroup = XTypeGroup(
+      label: 'Videos',
+      extensions: ['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm', '3gp'],
     );
+    
+    final file = await openFile(acceptedTypeGroups: [typeGroup]);
 
-    if (result != null && result.files.isNotEmpty) {
-      final file = result.files.first;
-      if (file.path != null) {
-        final pathParts = file.path!.split(RegExp(r'[/\\]'));
-        final fileName = pathParts.isNotEmpty ? pathParts.last : '未命名视频';
-        
-        final video = VideoItem(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          path: file.path!,
-          name: fileName,
-          position: 0,
-        );
-        
-        if (mounted) {
-          await context.read<VideoStore>().addVideo(video);
-        }
+    if (file != null) {
+      final fileName = file.name;
+      
+      final video = VideoItem(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        path: file.path,
+        name: fileName,
+        position: 0,
+      );
+      
+      if (mounted) {
+        await context.read<VideoStore>().addVideo(video);
       }
     }
   }
@@ -288,46 +286,54 @@ class _VideoGridItem extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Expanded(
-              flex: 3,
-              child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                child: Container(
-                  color: Colors.black,
-                  child: const Center(
-                    child: Icon(Icons.play_circle_fill, size: 50, color: Colors.white70),
+              flex: 2,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  ClipRRect(
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                    child: Container(
+                      color: Colors.black,
+                      child: const Center(
+                        child: Icon(Icons.play_circle_fill, size: 50, color: Colors.white70),
+                      ),
+                    ),
                   ),
-                ),
+                  if (video.position > 0)
+                    Positioned(
+                      bottom: 8,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          _formatDuration(video.position),
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
             Expanded(
               flex: 1,
               child: Padding(
                 padding: const EdgeInsets.all(8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      video.name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Colors.white,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    if (video.position > 0) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        _formatDuration(video.position),
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: Colors.grey[400],
-                        ),
-                      ),
-                    ],
-                  ],
+                child: Text(
+                  video.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
             ),
@@ -364,6 +370,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
   ChewieController? _chewieController;
   bool _isLoading = true;
   String? _errorMessage;
+  int _retryCount = 0;
+  static const int _maxRetries = 2;
 
   @override
   void initState() {
@@ -373,12 +381,32 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   Future<void> _initializePlayer() async {
     try {
+      // Wait a bit before retry to release resources
+      if (_retryCount > 0) {
+        await Future.delayed(Duration(milliseconds: 500 * _retryCount));
+      }
+
+      // Check if file exists first
       final videoFile = File(widget.video.path);
+      if (!await videoFile.exists()) {
+        setState(() {
+          _errorMessage = '文件不存在或已被删除';
+          _isLoading = false;
+        });
+        return;
+      }
+
+      // Dispose previous controllers first
+      _chewieController?.dispose();
+      _videoPlayerController?.dispose();
+      _chewieController = null;
+      _videoPlayerController = null;
+
       _videoPlayerController = VideoPlayerController.file(videoFile);
       
       await _videoPlayerController!.initialize();
 
-      if (widget.video.position > 0) {
+      if (widget.video.position > 0 && _retryCount == 0) {
         await _videoPlayerController!.seekTo(Duration(milliseconds: widget.video.position));
       }
 
@@ -397,9 +425,22 @@ class _PlayerScreenState extends State<PlayerScreen> {
         ),
         errorBuilder: (context, errorMessage) {
           return Center(
-            child: Text(
-              errorMessage,
-              style: const TextStyle(color: Colors.red),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error, color: Colors.red, size: 40),
+                const SizedBox(height: 10),
+                Text(
+                  errorMessage,
+                  style: const TextStyle(color: Colors.red, fontSize: 12),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 10),
+                ElevatedButton(
+                  onPressed: _retry,
+                  child: const Text('重试'),
+                ),
+              ],
             ),
           );
         },
@@ -407,15 +448,37 @@ class _PlayerScreenState extends State<PlayerScreen> {
       
       _videoPlayerController!.addListener(_onVideoPositionChanged);
       
+      _retryCount = 0;
       setState(() {
         _isLoading = false;
       });
     } catch (e) {
-      setState(() {
-        _errorMessage = '加载视频失败: $e';
-        _isLoading = false;
-      });
+      _retryCount++;
+      if (_retryCount < _maxRetries) {
+        // Retry
+        _initializePlayer();
+      } else {
+        String errorMsg = '加载视频失败';
+        if (e.toString().contains('VideoPlayer had error')) {
+          errorMsg = '视频格式不支持\n请尝试其他视频文件';
+        } else {
+          errorMsg = '加载视频失败: $e';
+        }
+        setState(() {
+          _errorMessage = errorMsg;
+          _isLoading = false;
+        });
+      }
     }
+  }
+
+  void _retry() {
+    _retryCount = 0;
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+    _initializePlayer();
   }
 
   void _onVideoPositionChanged() {
@@ -427,14 +490,23 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   @override
   void dispose() {
-    if (_videoPlayerController != null) {
-      _videoPlayerController!.pause();
-      final position = _videoPlayerController!.value.position.inMilliseconds;
-      _videoPlayerController!.removeListener(_onVideoPositionChanged);
-      context.read<VideoStore>().updateVideoPosition(widget.video.id, position);
+    try {
+      if (_videoPlayerController != null) {
+        _videoPlayerController!.removeListener(_onVideoPositionChanged);
+        if (_videoPlayerController!.value.isPlaying) {
+          _videoPlayerController!.pause();
+        }
+        final position = _videoPlayerController!.value.position.inMilliseconds;
+        _videoPlayerController!.dispose();
+        _videoPlayerController = null;
+      }
+      if (_chewieController != null) {
+        _chewieController!.dispose();
+        _chewieController = null;
+      }
+    } catch (e) {
+      // Ignore errors during dispose
     }
-    _chewieController?.dispose();
-    _videoPlayerController?.dispose();
     super.dispose();
   }
 
