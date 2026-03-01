@@ -8,6 +8,16 @@ import 'package:chewie/chewie.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+// 主题颜色配置 - 可在此处统一修改
+class AppTheme {
+  static const Color primaryColor = Color(0xFFFFD54F); // 浅橘黄色
+  static const Color backgroundColor = Color(0xFFFFF8E1); // 浅橘黄背景色
+  static const Color cardColor = Color(0xFFFFECB3); // 卡片颜色
+  static const Color textColor = Color(0xFF5D4037); // 文字颜色
+  static const Color darkBackgroundColor = Color(0xFF3E2723); // 深色背景（播放器）
+  static const Color darkCardColor = Color(0xFF4E342E); // 深色卡片
+}
+
 class VideoItem {
   final String id;
   final String path;
@@ -15,6 +25,8 @@ class VideoItem {
   int position;
   int duration;
   String? thumbnailBase64;
+  String? subtitlePath;
+  String? subtitleName;
 
   VideoItem({
     required this.id,
@@ -23,6 +35,8 @@ class VideoItem {
     this.position = 0,
     this.duration = 0,
     this.thumbnailBase64,
+    this.subtitlePath,
+    this.subtitleName,
   });
 
   Map<String, dynamic> toJson() => {
@@ -32,6 +46,8 @@ class VideoItem {
     'position': position,
     'duration': duration,
     'thumbnailBase64': thumbnailBase64,
+    'subtitlePath': subtitlePath,
+    'subtitleName': subtitleName,
   };
 
   factory VideoItem.fromJson(Map<String, dynamic> json) => VideoItem(
@@ -41,6 +57,8 @@ class VideoItem {
     position: json['position'] ?? 0,
     duration: json['duration'] ?? 0,
     thumbnailBase64: json['thumbnailBase64'],
+    subtitlePath: json['subtitlePath'],
+    subtitleName: json['subtitleName'],
   );
 }
 
@@ -86,6 +104,16 @@ class VideoStore extends ChangeNotifier {
     final index = _videos.indexWhere((v) => v.id == id);
     if (index != -1) {
       _videos[index].position = position;
+      await _saveVideos();
+      notifyListeners();
+    }
+  }
+
+  Future<void> updateSubtitle(String id, String? subtitlePath, String? subtitleName) async {
+    final index = _videos.indexWhere((v) => v.id == id);
+    if (index != -1) {
+      _videos[index].subtitlePath = subtitlePath;
+      _videos[index].subtitleName = subtitleName;
       await _saveVideos();
       notifyListeners();
     }
@@ -198,7 +226,10 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppTheme.backgroundColor,
       appBar: AppBar(
+        backgroundColor: AppTheme.primaryColor,
+        foregroundColor: AppTheme.textColor,
         title: const Text('Easy Player'),
         centerTitle: true,
       ),
@@ -243,20 +274,20 @@ class _HomeScreenState extends State<HomeScreen> {
       onTap: _addVideo,
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.grey[200],
+          color: AppTheme.cardColor,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey[400]!, width: 2),
+          border: Border.all(color: AppTheme.primaryColor, width: 2),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.add, size: 50, color: Colors.grey[600]),
+            Icon(Icons.add, size: 50, color: AppTheme.textColor),
             const SizedBox(height: 10),
             Text(
               '添加视频',
               style: TextStyle(
                 fontSize: 16,
-                color: Colors.grey[600],
+                color: AppTheme.textColor,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -308,7 +339,7 @@ class _VideoGridItem extends StatelessWidget {
       onLongPress: onLongPress,
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.grey[900],
+          color: AppTheme.cardColor,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
@@ -371,7 +402,7 @@ class _VideoGridItem extends StatelessWidget {
                           widthFactor: video.position / video.duration,
                           child: Container(
                             decoration: BoxDecoration(
-                              color: Colors.deepPurple,
+                              color: AppTheme.primaryColor,
                               borderRadius: BorderRadius.circular(2),
                             ),
                           ),
@@ -389,9 +420,9 @@ class _VideoGridItem extends StatelessWidget {
                   video.name,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
-                    color: Colors.white,
+                    color: AppTheme.textColor,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -479,7 +510,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
         allowMuting: true,
         showControls: true,
         materialProgressColors: ChewieProgressColors(
-          playedColor: Colors.deepPurple,
+          playedColor: AppTheme.primaryColor,
           handleColor: Colors.white,
           backgroundColor: Colors.white38,
           bufferedColor: Colors.white54,
@@ -590,52 +621,110 @@ class _PlayerScreenState extends State<PlayerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppTheme.darkBackgroundColor,
       appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
+        backgroundColor: AppTheme.primaryColor,
+        foregroundColor: AppTheme.textColor,
         title: Text(
           widget.video.name,
           style: const TextStyle(fontSize: 14),
         ),
       ),
-      body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: Colors.white),
-            )
-          : _errorMessage != null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.error, color: Colors.red, size: 50),
-                      const SizedBox(height: 20),
-                      Text(
-                        _errorMessage!,
-                        style: const TextStyle(color: Colors.white),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 20),
-                      ElevatedButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('返回'),
-                      ),
-                    ],
-                  ),
-                )
-              : _chewieController != null
-                  ? GestureDetector(
-                      onDoubleTap: _togglePlayPause,
-                      child: Center(
-                        child: AspectRatio(
-                          aspectRatio: 16 / 9,
-                          child: Chewie(controller: _chewieController!),
+      body: Column(
+        children: [
+          // 视频播放器固定在上方
+          SizedBox(
+            height: 250,
+            child: _isLoading
+                ? Center(child: CircularProgressIndicator(color: AppTheme.primaryColor))
+                : _errorMessage != null
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.error, color: Colors.red, size: 40),
+                            const SizedBox(height: 10),
+                            Text(_errorMessage!, style: const TextStyle(color: Colors.white), textAlign: TextAlign.center),
+                            const SizedBox(height: 10),
+                            ElevatedButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('返回'),
+                            ),
+                          ],
                         ),
-                      ),
-                    )
-                  : const Center(
-                      child: Text('无法加载播放器', style: TextStyle(color: Colors.white)),
+                      )
+                    : _chewieController != null
+                        ? GestureDetector(
+                            onDoubleTap: _togglePlayPause,
+                            child: Center(
+                              child: AspectRatio(
+                                aspectRatio: 16 / 9,
+                                child: Chewie(controller: _chewieController!),
+                              ),
+                            ),
+                          )
+                        : const Center(child: Text('无法加载播放器', style: TextStyle(color: Colors.white))),
+          ),
+          // 字幕列表
+          Expanded(
+            child: Container(
+              color: AppTheme.darkCardColor,
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  const Text(
+                    '字幕',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
                     ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (widget.video.subtitlePath != null && widget.video.subtitleName != null)
+                    _buildSubtitleItem(widget.video.subtitleName!, widget.video.subtitlePath!, true)
+                  else
+                    _buildAddSubtitleButton(),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSubtitleItem(String name, String path, bool isActive) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: AppTheme.backgroundColor,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: ListTile(
+        leading: Icon(Icons.subtitles, color: AppTheme.textColor),
+        title: Text(name, style: TextStyle(color: AppTheme.textColor)),
+        subtitle: Text(path, style: TextStyle(color: AppTheme.textColor.withOpacity(0.6), fontSize: 10), maxLines: 1, overflow: TextOverflow.ellipsis),
+      ),
+    );
+  }
+
+  Widget _buildAddSubtitleButton() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.backgroundColor,
+        border: Border.all(color: AppTheme.textColor.withOpacity(0.3)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.subtitles, color: AppTheme.textColor.withOpacity(0.6)),
+          const SizedBox(width: 8),
+          Text('暂无字幕', style: TextStyle(color: AppTheme.textColor.withOpacity(0.6))),
+        ],
+      ),
     );
   }
 }
