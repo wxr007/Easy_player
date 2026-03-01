@@ -14,7 +14,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   video_player: ^2.8.2
   chewie: ^1.7.4
-  file_selector: ^1.0.3
+  file_picker: ^6.1.1
   provider: ^6.1.0
   permission_handler: ^11.0.0
   path_provider: ^2.1.2

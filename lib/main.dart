@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:file_selector/file_selector.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -143,25 +143,29 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _addVideo() async {
-    const typeGroup = XTypeGroup(
-      label: 'Videos',
-      extensions: ['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm', '3gp'],
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm', '3gp'],
+      allowMultiple: false,
     );
-    
-    final file = await openFile(acceptedTypeGroups: [typeGroup]);
 
-    if (file != null) {
-      final fileName = file.name;
-      
-      final video = VideoItem(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        path: file.path,
-        name: fileName,
-        position: 0,
-      );
-      
-      if (mounted) {
-        await context.read<VideoStore>().addVideo(video);
+    if (result != null && result.files.isNotEmpty) {
+      final file = result.files.first;
+      if (file.path != null) {
+        final realFileName = file.name ?? '未知视频_${DateTime.now().millisecondsSinceEpoch}';
+        // final pathParts = file.path!.split('/');
+        // final fileName = pathParts.isNotEmpty ? pathParts.last : '视频_${DateTime.now().millisecondsSinceEpoch}';
+        
+        final video = VideoItem(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          path: file.path!,
+          name: file.path!,
+          position: 0,
+        );
+        
+        if (mounted) {
+          await context.read<VideoStore>().addVideo(video);
+        }
       }
     }
   }
@@ -327,7 +331,7 @@ class _VideoGridItem extends StatelessWidget {
                 padding: const EdgeInsets.all(8),
                 child: Text(
                   video.name,
-                  maxLines: 2,
+                  maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 12,
