@@ -8,7 +8,7 @@ import 'package:chewie/chewie.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:video_thumbnail_plus/video_thumbnail_plus.dart';
+import 'package:video_thumbnail/video_thumbnail.dart';
 
 // 主题颜色配置 - 可在此处统一修改
 class AppTheme {
@@ -257,7 +257,7 @@ class _HomeScreenState extends State<HomeScreen> {
         timeMs = (videoDurationMs * 0.1).toInt();
       }
       
-      final uint8list = await VideoThumbnailPlus.thumbnailData(
+      final uint8list = await VideoThumbnail.thumbnailData(
         video: videoPath,
         imageFormat: ImageFormat.JPEG,
         maxWidth: 400,

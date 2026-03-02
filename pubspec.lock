@@ -549,14 +549,14 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "2.3.5"
-  video_thumbnail_plus:
+  video_thumbnail:
     dependency: "direct main"
     description:
-      name: video_thumbnail_plus
-      sha256: ae4c7adb8c555350c0a5808c3e03b62343d84fa506a780f5b57d61ad3645d946
+      name: video_thumbnail
+      sha256: "181a0c205b353918954a881f53a3441476b9e301641688a581e0c13f00dc588b"
       url: "https://pub.flutter-io.cn"
     source: hosted
-    version: "0.0.2"
+    version: "0.5.6"
   vm_service:
     dependency: transitive
     description:
