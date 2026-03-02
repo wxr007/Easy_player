@@ -501,6 +501,73 @@ class _VideoGridItem extends StatelessWidget {
   }
 }
 
+List<SubtitleItem> parseSubtitles(String content) {
+  final List<SubtitleItem> subtitles = [];
+  final lines = content.split('\n');
+  
+  int i = 0;
+  while (i < lines.length) {
+    String line = lines[i].trim();
+    
+    if (line.isEmpty) {
+      i++;
+      continue;
+    }
+    
+    if (line.contains('-->')) {
+      try {
+        final times = line.split('-->');
+        if (times.length == 2) {
+          final startMs = _parseTime(times[0].trim());
+          final endMs = _parseTime(times[1].trim());
+          
+          final List<String> textLines = [];
+          i++;
+          while (i < lines.length && lines[i].trim().isNotEmpty) {
+            textLines.add(lines[i].trim());
+            i++;
+          }
+          
+          if (textLines.isNotEmpty) {
+            subtitles.add(SubtitleItem(
+              startMs: startMs,
+              endMs: endMs,
+              text: textLines.join('\n'),
+            ));
+          }
+          continue;
+        }
+      } catch (e) {
+        debugPrint('Error parsing subtitle line: $line');
+      }
+    }
+    i++;
+  }
+  
+  return subtitles;
+}
+
+int _parseTime(String timeStr) {
+  timeStr = timeStr.replaceAll(',', '.');
+  
+  final parts = timeStr.split(':');
+  if (parts.length == 3) {
+    final hours = int.parse(parts[0]);
+    final minutes = int.parse(parts[1]);
+    final secondsParts = parts[2].split('.');
+    final seconds = int.parse(secondsParts[0]);
+    final millis = secondsParts.length > 1 ? int.parse(secondsParts[1].padRight(3, '0').substring(0, 3)) : 0;
+    return hours * 3600000 + minutes * 60000 + seconds * 1000 + millis;
+  } else if (parts.length == 2) {
+    final minutes = int.parse(parts[0]);
+    final secondsParts = parts[1].split('.');
+    final seconds = int.parse(secondsParts[0]);
+    final millis = secondsParts.length > 1 ? int.parse(secondsParts[1].padRight(3, '0').substring(0, 3)) : 0;
+    return minutes * 60000 + seconds * 1000 + millis;
+  }
+  return 0;
+}
+
 class PlayerScreen extends StatefulWidget {
   final VideoItem video;
 
@@ -510,6 +577,14 @@ class PlayerScreen extends StatefulWidget {
   State<PlayerScreen> createState() => _PlayerScreenState();
 }
 
+class SubtitleItem {
+  final int startMs;
+  final int endMs;
+  final String text;
+
+  SubtitleItem({required this.startMs, required this.endMs, required this.text});
+}
+
 class _PlayerScreenState extends State<PlayerScreen> {
   VideoPlayerController? _videoPlayerController;
   ChewieController? _chewieController;
@@ -517,11 +592,32 @@ class _PlayerScreenState extends State<PlayerScreen> {
   String? _errorMessage;
   int _retryCount = 0;
   static const int _maxRetries = 2;
+  List<SubtitleItem> _subtitles = [];
+  bool _isLoadingSubtitles = false;
 
   @override
   void initState() {
     super.initState();
     _initializePlayer();
+    _loadExistingSubtitles();
+  }
+
+  Future<void> _loadExistingSubtitles() async {
+    if (widget.video.subtitlePath != null) {
+      try {
+        final subtitleFile = File(widget.video.subtitlePath!);
+        if (await subtitleFile.exists()) {
+          final subtitleContent = await subtitleFile.readAsString();
+          final parsed = parseSubtitles(subtitleContent);
+          setState(() {
+            _subtitles = parsed;
+          });
+          debugPrint('Loaded ${parsed.length} existing subtitles');
+        }
+      } catch (e) {
+        debugPrint('Failed to load existing subtitle: $e');
+      }
+    }
   }
 
   Future<void> _initializePlayer() async {
@@ -598,7 +694,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
           );
         },
       );
-      
+       
       _videoPlayerController!.addListener(_onVideoPositionChanged);
       
       _retryCount = 0;
@@ -671,11 +767,24 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
   }
 
+  String _formatDuration(int milliseconds) {
+    if (milliseconds <= 0) return '00:00';
+    final duration = Duration(milliseconds: milliseconds);
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes.remainder(60);
+    final seconds = duration.inSeconds.remainder(60);
+    
+    if (hours > 0) {
+      return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+    }
+    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+  }
+
   Future<void> _pickSubtitle() async {
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['srt', 'ass', 'ssa', 'sub', 'vtt'],
+        allowedExtensions: ['srt', 'vtt'],
       );
 
       if (result != null && result.files.single.path != null) {
@@ -687,7 +796,26 @@ class _PlayerScreenState extends State<PlayerScreen> {
         setState(() {
           widget.video.subtitlePath = subtitlePath;
           widget.video.subtitleName = subtitleName;
+          _isLoadingSubtitles = true;
         });
+        
+        try {
+          final subtitleFile = File(subtitlePath);
+          final subtitleContent = await subtitleFile.readAsString();
+          final parsed = parseSubtitles(subtitleContent);
+          
+          setState(() {
+            _subtitles = parsed;
+            _isLoadingSubtitles = false;
+          });
+          debugPrint('Loaded ${parsed.length} subtitles');
+        } catch (e) {
+          debugPrint('Failed to parse subtitle: $e');
+          setState(() {
+            _subtitles = [];
+            _isLoadingSubtitles = false;
+          });
+        }
       }
     } catch (e) {
       debugPrint('Failed to pick subtitle: $e');
@@ -755,21 +883,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
           Expanded(
             child: Container(
               color: AppTheme.backgroundColor,
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  Text(
-                    '字幕',
-                    style: TextStyle(
-                      color: AppTheme.textColor,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildSubtitleSection(),
-                ],
-              ),
+              child: _buildSubtitleSection(),
             ),
           ),
         ],
@@ -779,13 +893,47 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   Widget _buildSubtitleSection() {
     if (widget.video.subtitlePath != null && widget.video.subtitleName != null) {
-      return _buildSubtitleItem(widget.video.subtitleName!, widget.video.subtitlePath!);
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildSubtitleHeader(widget.video.subtitleName!, widget.video.subtitlePath!),
+            const SizedBox(height: 8),
+            if (_isLoadingSubtitles)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: CircularProgressIndicator(color: AppTheme.primaryColor),
+                ),
+              )
+            else if (_subtitles.isEmpty)
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  '无法解析字幕文件',
+                  style: TextStyle(color: AppTheme.textColor.withOpacity(0.6)),
+                ),
+              )
+            else
+              Expanded(
+                child: ListView.builder(
+                  itemCount: _subtitles.length,
+                  itemBuilder: (context, index) {
+                    final subtitle = _subtitles[index];
+                    return _buildSubtitleListItem(subtitle, index);
+                  },
+                ),
+              ),
+          ],
+        ),
+      );
     } else {
       return _buildAddSubtitleButton();
     }
   }
 
-  Widget _buildSubtitleItem(String name, String path) {
+  Widget _buildSubtitleHeader(String name, String path) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
@@ -811,10 +959,54 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 setState(() {
                   widget.video.subtitlePath = null;
                   widget.video.subtitleName = null;
+                  _subtitles = [];
                 });
               },
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSubtitleListItem(SubtitleItem subtitle, int index) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: AppTheme.cardColor,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppTheme.primaryColor.withOpacity(0.3)),
+      ),
+      child: InkWell(
+        onTap: () {
+          if (_videoPlayerController != null) {
+            _videoPlayerController!.seekTo(Duration(milliseconds: subtitle.startMs));
+          }
+        },
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${_formatDuration(subtitle.startMs)} --> ${_formatDuration(subtitle.endMs)}',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: AppTheme.textColor.withOpacity(0.6),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                subtitle.text,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: AppTheme.textColor,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
