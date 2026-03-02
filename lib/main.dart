@@ -594,10 +594,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
   static const int _maxRetries = 2;
   List<SubtitleItem> _subtitles = [];
   bool _isLoadingSubtitles = false;
+  ScrollController? _subtitleScrollController;
+  int _currentSubtitleIndex = -1;
+  final List<GlobalKey> _subtitleKeys = [];
 
   @override
   void initState() {
     super.initState();
+    _subtitleScrollController = ScrollController();
     _initializePlayer();
     _loadExistingSubtitles();
   }
@@ -609,15 +613,31 @@ class _PlayerScreenState extends State<PlayerScreen> {
         if (await subtitleFile.exists()) {
           final subtitleContent = await subtitleFile.readAsString();
           final parsed = parseSubtitles(subtitleContent);
+          _subtitleKeys.clear();
+          for (int i = 0; i < parsed.length; i++) {
+            _subtitleKeys.add(GlobalKey());
+          }
           setState(() {
             _subtitles = parsed;
           });
+          
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _syncSubtitleToVideoPosition();
+          });
+          
           debugPrint('Loaded ${parsed.length} existing subtitles');
         }
       } catch (e) {
         debugPrint('Failed to load existing subtitle: $e');
       }
     }
+  }
+
+  void _syncSubtitleToVideoPosition() {
+    if (_subtitles.isEmpty || _videoPlayerController == null) return;
+    
+    final currentPosition = _videoPlayerController!.value.position.inMilliseconds;
+    _updateCurrentSubtitle(currentPosition);
   }
 
   Future<void> _initializePlayer() async {
@@ -697,6 +717,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
        
       _videoPlayerController!.addListener(_onVideoPositionChanged);
       
+      _syncSubtitleToVideoPosition();
+      
       _retryCount = 0;
       setState(() {
         _isLoading = false;
@@ -730,9 +752,59 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   void _onVideoPositionChanged() {
-    if (_videoPlayerController != null && _videoPlayerController!.value.isPlaying) {
+    if (_videoPlayerController != null) {
       final position = _videoPlayerController!.value.position.inMilliseconds;
-      context.read<VideoStore>().updateVideoPosition(widget.video.id, position);
+      if (_videoPlayerController!.value.isPlaying) {
+        context.read<VideoStore>().updateVideoPosition(widget.video.id, position);
+      }
+      _updateCurrentSubtitle(position);
+    }
+  }
+
+  void _updateCurrentSubtitle(int positionMs) {
+    if (_subtitles.isEmpty) return;
+    
+    int newIndex = -1;
+    for (int i = 0; i < _subtitles.length; i++) {
+      if (positionMs >= _subtitles[i].startMs && positionMs < _subtitles[i].endMs) {
+        newIndex = i;
+        break;
+      }
+      if (positionMs >= _subtitles[i].endMs) {
+        if (i + 1 < _subtitles.length && positionMs < _subtitles[i + 1].startMs) {
+          newIndex = i;
+          break;
+        }
+      }
+    }
+    
+    if (newIndex == -1 && positionMs >= _subtitles.last.endMs) {
+      newIndex = _subtitles.length - 1;
+    }
+    
+    if (newIndex != _currentSubtitleIndex) {
+      setState(() {
+        _currentSubtitleIndex = newIndex;
+      });
+      
+      if (newIndex >= 0 && _subtitleScrollController != null && _subtitleScrollController!.hasClients) {
+        _scrollToSubtitle(newIndex);
+      }
+    }
+  }
+
+  void _scrollToSubtitle(int index) {
+    if (index < 0 || index >= _subtitleKeys.length) return;
+    
+    final key = _subtitleKeys[index];
+    final context = key.currentContext;
+    if (context != null) {
+      Scrollable.ensureVisible(
+        context,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+        alignment: 0.5,
+      );
     }
   }
 
@@ -750,6 +822,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
       if (_chewieController != null) {
         _chewieController!.dispose();
         _chewieController = null;
+      }
+      if (_subtitleScrollController != null) {
+        _subtitleScrollController!.dispose();
+        _subtitleScrollController = null;
       }
     } catch (e) {
       // Ignore errors during dispose
@@ -803,6 +879,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
           final subtitleFile = File(subtitlePath);
           final subtitleContent = await subtitleFile.readAsString();
           final parsed = parseSubtitles(subtitleContent);
+          
+          _subtitleKeys.clear();
+          for (int i = 0; i < parsed.length; i++) {
+            _subtitleKeys.add(GlobalKey());
+          }
           
           setState(() {
             _subtitles = parsed;
@@ -918,6 +999,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
             else
               Expanded(
                 child: ListView.builder(
+                  controller: _subtitleScrollController,
                   itemCount: _subtitles.length,
                   itemBuilder: (context, index) {
                     final subtitle = _subtitles[index];
@@ -970,12 +1052,18 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Widget _buildSubtitleListItem(SubtitleItem subtitle, int index) {
+    final bool isActive = index == _currentSubtitleIndex;
+    
     return Container(
+      key: _subtitleKeys.length > index ? _subtitleKeys[index] : null,
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: AppTheme.cardColor,
+        color: isActive ? AppTheme.primaryColor : AppTheme.cardColor,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppTheme.primaryColor.withOpacity(0.3)),
+        border: Border.all(
+          color: isActive ? AppTheme.textColor : AppTheme.primaryColor.withOpacity(0.3),
+          width: isActive ? 2 : 1,
+        ),
       ),
       child: InkWell(
         onTap: () {
@@ -993,7 +1081,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 '${_formatDuration(subtitle.startMs)} --> ${_formatDuration(subtitle.endMs)}',
                 style: TextStyle(
                   fontSize: 11,
-                  color: AppTheme.textColor.withOpacity(0.6),
+                  color: isActive ? AppTheme.textColor : AppTheme.textColor.withOpacity(0.6),
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -1002,7 +1090,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 subtitle.text,
                 style: TextStyle(
                   fontSize: 14,
-                  color: AppTheme.textColor,
+                  color: isActive ? Colors.black87 : AppTheme.textColor,
+                  fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
                 ),
               ),
             ],
