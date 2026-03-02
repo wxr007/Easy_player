@@ -1,13 +1,14 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:wechat_assets_picker/wechat_assets_picker.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:video_thumbnail_plus/video_thumbnail_plus.dart';
 
 // 主题颜色配置 - 可在此处统一修改
 class AppTheme {
@@ -118,6 +119,24 @@ class VideoStore extends ChangeNotifier {
     }
   }
 
+  Future<void> updateThumbnail(String id, String? thumbnailBase64) async {
+    final index = _videos.indexWhere((v) => v.id == id);
+    if (index != -1) {
+      _videos[index].thumbnailBase64 = thumbnailBase64;
+      await _saveVideos();
+      notifyListeners();
+    }
+  }
+
+  Future<void> updateDuration(String id, int duration) async {
+    final index = _videos.indexWhere((v) => v.id == id);
+    if (index != -1) {
+      _videos[index].duration = duration;
+      await _saveVideos();
+      notifyListeners();
+    }
+  }
+
   Future<void> removeVideo(String id) async {
     _videos.removeWhere((v) => v.id == id);
     await _saveVideos();
@@ -179,44 +198,83 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _addVideo() async {
-    final List<AssetEntity>? result = await AssetPicker.pickAssets(
-      context,
-      pickerConfig: const AssetPickerConfig(
-        maxAssets: 1,
-        requestType: RequestType.video,
-      ),
-    );
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm', '3gp', "pdf"],
+        allowMultiple: false,
+      );
 
-    if (result != null && result.isNotEmpty) {
-      final asset = result.first;
-      final file = await asset.file;
-      if (file != null) {
-        final fileName = asset.title ?? '视频_${DateTime.now().millisecondsSinceEpoch}';
-        
-        final thumbnailData = await asset.thumbnailDataWithSize(
-          const ThumbnailSize(200, 200),
-          quality: 100,
-        );
-        String? thumbnailBase64;
-        if (thumbnailData != null) {
-          thumbnailBase64 = base64Encode(thumbnailData);
-        }
-        
-        final duration = asset.duration * 1000;
-        
-        final video = VideoItem(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          path: file.path,
-          name: fileName,
-          position: 0,
-          duration: duration,
-          thumbnailBase64: thumbnailBase64,
-        );
-        
-        if (mounted) {
-          await context.read<VideoStore>().addVideo(video);
+      if (result != null && result.files.isNotEmpty) {
+        final file = result.files.first;
+        if (file.path != null) {
+          final fileName = file.name;
+          final videoPath = file.path!;
+          
+          int duration = 0;
+          String? thumbnailBase64;
+          
+          try {
+            final videoFile = File(videoPath);
+            final tempController = VideoPlayerController.file(videoFile);
+            await tempController.initialize();
+            duration = tempController.value.duration.inMilliseconds;
+            await tempController.dispose();
+            
+            final thumbnailData = await _generateThumbnail(videoPath, duration);
+            if (thumbnailData != null) {
+              thumbnailBase64 = base64Encode(thumbnailData);
+            }
+          } catch (e) {
+            debugPrint('Error getting video info: $e');
+          }
+          
+          final video = VideoItem(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            path: videoPath,
+            name: fileName,
+            position: 0,
+            duration: duration,
+            thumbnailBase64: thumbnailBase64,
+          );
+          
+          if (mounted) {
+            await context.read<VideoStore>().addVideo(video);
+          }
         }
       }
+    } catch (e) {
+      debugPrint('Error picking video: $e');
+    }
+  }
+
+  Future<Uint8List?> _generateThumbnail(String videoPath, int videoDurationMs) async {
+    try {
+      debugPrint('Generating thumbnail for: $videoPath');
+      
+      int timeMs = 1000;
+      if (videoDurationMs > 5000) {
+        timeMs = (videoDurationMs * 0.1).toInt();
+      }
+      
+      final uint8list = await VideoThumbnailPlus.thumbnailData(
+        video: videoPath,
+        imageFormat: ImageFormat.JPEG,
+        maxWidth: 400,
+        quality: 80,
+        timeMs: timeMs,
+      );
+      
+      if (uint8list != null) {
+        debugPrint('Thumbnail generated successfully, size: ${uint8list.length}');
+      } else {
+        debugPrint('Thumbnail is null');
+      }
+      
+      return uint8list;
+    } catch (e) {
+      debugPrint('Error generating thumbnail: $e');
+      return null;
     }
   }
 
@@ -497,10 +555,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _chewieController = ChewieController(
         videoPlayerController: _videoPlayerController!,
         autoPlay: true,
-        looping: false,
+        looping: true,
         allowFullScreen: true,
         allowMuting: true,
         showControls: true,
+        showControlsOnInitialize: false,
+        hideControlsTimer: const Duration(seconds: 2),
+        overlay: Container(
+          color: Colors.transparent,
+        ),
         materialProgressColors: ChewieProgressColors(
           playedColor: AppTheme.primaryColor,
           handleColor: Colors.white,
@@ -666,12 +729,24 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         ),
                       )
                     : _chewieController != null
-                        ? GestureDetector(
-                            onDoubleTap: _togglePlayPause,
+                        ? Container(
+                            color: Colors.black,
                             child: Center(
                               child: AspectRatio(
                                 aspectRatio: 16 / 9,
-                                child: Chewie(controller: _chewieController!),
+                                child: GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onTap: () {
+                                    debugPrint('onTap triggered');
+                                  },
+                                  onDoubleTap: () {
+                                    debugPrint('onDoubleTap triggered');
+                                    _togglePlayPause();
+                                  },
+                                  child: Chewie(
+                                    controller: _chewieController!,
+                                  ),
+                                ),
                               ),
                             ),
                           )
