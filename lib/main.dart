@@ -597,6 +597,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   ScrollController? _subtitleScrollController;
   int _currentSubtitleIndex = -1;
   final List<GlobalKey> _subtitleKeys = [];
+  int _currentPosition = 0;
 
   @override
   void initState() {
@@ -757,6 +758,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
       if (_videoPlayerController!.value.isPlaying) {
         context.read<VideoStore>().updateVideoPosition(widget.video.id, position);
       }
+      setState(() {
+        _currentPosition = position;
+      });
       _updateCurrentSubtitle(position);
     }
   }
@@ -962,10 +966,48 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         : Center(child: Text('无法加载播放器', style: TextStyle(color: AppTheme.textColor))),
           ),
           Expanded(
-            child: Container(
-              color: AppTheme.backgroundColor,
-              child: _buildSubtitleSection(),
+            child: _buildSubtitleSection(),
+          ),
+          _buildToolbar(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildToolbar() {
+    return Container(
+      height: 50,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: AppTheme.primaryColor,
+        border: Border(
+          top: BorderSide(color: AppTheme.primaryColor.withOpacity(0.3)),
+        ),
+      ),
+      child: Row(
+        children: [
+          Text(
+            '${_formatDuration(_currentPosition)} / ${_formatDuration(widget.video.duration)}',
+            style: TextStyle(
+              color: AppTheme.textColor,
+              fontSize: 12,
             ),
+          ),
+          const Spacer(),
+          IconButton(
+            icon: Icon(
+              _videoPlayerController?.value.isPlaying == true ? Icons.pause : Icons.play_arrow,
+              color: AppTheme.textColor,
+            ),
+            onPressed: _togglePlayPause,
+          ),
+          const Spacer(),
+          IconButton(
+            icon: Icon(
+              widget.video.subtitlePath != null ? Icons.subtitles : Icons.subtitles_off,
+              color: AppTheme.textColor,
+            ),
+            onPressed: _pickSubtitle,
           ),
         ],
       ),
@@ -974,44 +1016,43 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   Widget _buildSubtitleSection() {
     if (widget.video.subtitlePath != null && widget.video.subtitleName != null) {
-      return Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildSubtitleHeader(widget.video.subtitleName!, widget.video.subtitlePath!),
-            const SizedBox(height: 8),
-            if (_isLoadingSubtitles)
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: CircularProgressIndicator(color: AppTheme.primaryColor),
-                ),
-              )
-            else if (_subtitles.isEmpty)
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  '无法解析字幕文件',
-                  style: TextStyle(color: AppTheme.textColor.withOpacity(0.6)),
-                ),
-              )
-            else
-              Expanded(
-                child: ListView.builder(
-                  controller: _subtitleScrollController,
-                  itemCount: _subtitles.length,
-                  itemBuilder: (context, index) {
-                    final subtitle = _subtitles[index];
-                    return _buildSubtitleListItem(subtitle, index);
-                  },
-                ),
-              ),
-          ],
-        ),
+      if (_isLoadingSubtitles) {
+        return Center(child: CircularProgressIndicator(color: AppTheme.primaryColor));
+      }
+      if (_subtitles.isEmpty) {
+        return Center(
+          child: Text(
+            '无法解析字幕文件',
+            style: TextStyle(color: AppTheme.textColor.withOpacity(0.6)),
+          ),
+        );
+      }
+      return ListView.builder(
+        controller: _subtitleScrollController,
+        padding: const EdgeInsets.all(8),
+        itemCount: _subtitles.length,
+        itemBuilder: (context, index) {
+          final subtitle = _subtitles[index];
+          return _buildSubtitleListItem(subtitle, index);
+        },
       );
     } else {
-      return _buildAddSubtitleButton();
+      return Center(
+        child: InkWell(
+          onTap: _pickSubtitle,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.subtitles_off, size: 48, color: AppTheme.textColor.withOpacity(0.4)),
+              const SizedBox(height: 8),
+              Text(
+                '点击添加字幕',
+                style: TextStyle(color: AppTheme.textColor.withOpacity(0.6)),
+              ),
+            ],
+          ),
+        ),
+      );
     }
   }
 
