@@ -7,6 +7,7 @@ import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:file_picker/file_picker.dart';
 
 // 主题颜色配置 - 可在此处统一修改
 class AppTheme {
@@ -192,17 +193,15 @@ class _HomeScreenState extends State<HomeScreen> {
       if (file != null) {
         final fileName = asset.title ?? '视频_${DateTime.now().millisecondsSinceEpoch}';
         
-        // 获取缩略图（200x200）
         final thumbnailData = await asset.thumbnailDataWithSize(
           const ThumbnailSize(200, 200),
-          quality: 80,
+          quality: 100,
         );
         String? thumbnailBase64;
         if (thumbnailData != null) {
           thumbnailBase64 = base64Encode(thumbnailData);
         }
         
-        // 获取视频时长（秒转换为毫秒）
         final duration = asset.duration * 1000;
         
         final video = VideoItem(
@@ -362,7 +361,6 @@ class _VideoGridItem extends StatelessWidget {
                             ),
                     ),
                   ),
-                  // 时间显示 已观看/总时长
                   Positioned(
                     bottom: 8,
                     right: 8,
@@ -381,7 +379,6 @@ class _VideoGridItem extends StatelessWidget {
                       ),
                     ),
                   ),
-                  // 进度条
                   if (video.duration > 0)
                     Positioned(
                       bottom: 0,
@@ -471,12 +468,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   Future<void> _initializePlayer() async {
     try {
-      // Wait a bit before retry to release resources
       if (_retryCount > 0) {
         await Future.delayed(Duration(milliseconds: 500 * _retryCount));
       }
 
-      // Check if file exists first
       final videoFile = File(widget.video.path);
       if (!await videoFile.exists()) {
         setState(() {
@@ -486,7 +481,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
         return;
       }
 
-      // Dispose previous controllers first
       _chewieController?.dispose();
       _videoPlayerController?.dispose();
       _chewieController = null;
@@ -551,7 +545,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
     } catch (e) {
       _retryCount++;
       if (_retryCount < _maxRetries) {
-        // Retry
         _initializePlayer();
       } else {
         String errorMsg = '加载视频失败';
@@ -592,7 +585,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
         if (_videoPlayerController!.value.isPlaying) {
           _videoPlayerController!.pause();
         }
-        final position = _videoPlayerController!.value.position.inMilliseconds;
         _videoPlayerController!.dispose();
         _videoPlayerController = null;
       }
@@ -616,6 +608,29 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
   }
 
+  Future<void> _pickSubtitle() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['srt', 'ass', 'ssa', 'sub', 'vtt'],
+      );
+
+      if (result != null && result.files.single.path != null) {
+        final subtitlePath = result.files.single.path!;
+        final subtitleName = result.files.single.name;
+        
+        await context.read<VideoStore>().updateSubtitle(widget.video.id, subtitlePath, subtitleName);
+        
+        setState(() {
+          widget.video.subtitlePath = subtitlePath;
+          widget.video.subtitleName = subtitleName;
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to pick subtitle: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -630,7 +645,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
       ),
       body: Column(
         children: [
-          // 视频播放器固定在上方
           SizedBox(
             height: 250,
             child: _isLoading
@@ -642,7 +656,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                           children: [
                             const Icon(Icons.error, color: Colors.red, size: 40),
                             const SizedBox(height: 10),
-                            Text(_errorMessage!, style: const TextStyle(color: Colors.white), textAlign: TextAlign.center),
+                            Text(_errorMessage!, style: TextStyle(color: AppTheme.textColor), textAlign: TextAlign.center),
                             const SizedBox(height: 10),
                             ElevatedButton(
                               onPressed: () => Navigator.pop(context),
@@ -661,16 +675,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
                               ),
                             ),
                           )
-                        : const Center(child: Text('无法加载播放器', style: TextStyle(color: Colors.white))),
+                        : Center(child: Text('无法加载播放器', style: TextStyle(color: AppTheme.textColor))),
           ),
-          // 字幕列表
           Expanded(
             child: Container(
               color: AppTheme.backgroundColor,
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  const Text(
+                  Text(
                     '字幕',
                     style: TextStyle(
                       color: AppTheme.textColor,
@@ -679,10 +692,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  if (widget.video.subtitlePath != null && widget.video.subtitleName != null)
-                    _buildSubtitleItem(widget.video.subtitleName!, widget.video.subtitlePath!, true)
-                  else
-                    _buildAddSubtitleButton(),
+                  _buildSubtitleSection(),
                 ],
               ),
             ),
@@ -692,36 +702,67 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
-  Widget _buildSubtitleItem(String name, String path, bool isActive) {
+  Widget _buildSubtitleSection() {
+    if (widget.video.subtitlePath != null && widget.video.subtitleName != null) {
+      return _buildSubtitleItem(widget.video.subtitleName!, widget.video.subtitlePath!);
+    } else {
+      return _buildAddSubtitleButton();
+    }
+  }
+
+  Widget _buildSubtitleItem(String name, String path) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: AppTheme.backgroundColor,
+        color: AppTheme.cardColor,
         borderRadius: BorderRadius.circular(8),
       ),
       child: ListTile(
         leading: Icon(Icons.subtitles, color: AppTheme.textColor),
         title: Text(name, style: TextStyle(color: AppTheme.textColor)),
-        subtitle: Text(path, style: TextStyle(color: AppTheme.textColor.withOpacity(0.6), fontSize: 10), maxLines: 1, overflow: TextOverflow.ellipsis),
+        subtitle: Text(
+          path, 
+          style: TextStyle(color: AppTheme.textColor.withOpacity(0.6), fontSize: 10), 
+          maxLines: 1, 
+          overflow: TextOverflow.ellipsis
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: Icon(Icons.delete, color: AppTheme.textColor.withOpacity(0.6)),
+              onPressed: () async {
+                await context.read<VideoStore>().updateSubtitle(widget.video.id, null, null);
+                setState(() {
+                  widget.video.subtitlePath = null;
+                  widget.video.subtitleName = null;
+                });
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildAddSubtitleButton() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppTheme.backgroundColor,
-        border: Border.all(color: AppTheme.textColor.withOpacity(0.3)),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.subtitles, color: AppTheme.textColor.withOpacity(0.6)),
-          const SizedBox(width: 8),
-          Text('暂无字幕', style: TextStyle(color: AppTheme.textColor.withOpacity(0.6))),
-        ],
+    return InkWell(
+      onTap: _pickSubtitle,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppTheme.cardColor,
+          border: Border.all(color: AppTheme.textColor.withOpacity(0.3)),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.subtitles, color: AppTheme.textColor.withOpacity(0.6)),
+            const SizedBox(width: 8),
+            Text('添加字幕', style: TextStyle(color: AppTheme.textColor.withOpacity(0.6))),
+          ],
+        ),
       ),
     );
   }
