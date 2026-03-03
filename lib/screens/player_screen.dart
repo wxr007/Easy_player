@@ -33,6 +33,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   final List<GlobalKey> _subtitleKeys = [];
   int _currentPosition = 0;
   bool _targetMode = false;
+  double _averageItemHeight = 90.0; // Will be updated after first calculation
 
   @override
   void initState() {
@@ -57,10 +58,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
             _subtitles = parsed;
           });
           
-          // Wait for ListView to fully render all items
+          // Scroll to current position after loading
           WidgetsBinding.instance.addPostFrameCallback((_) {
             Future.delayed(const Duration(milliseconds: 100), () {
               if (mounted) {
+                _calculateAverageItemHeight(); // Calculate average height once after initial load
                 _syncSubtitleToVideoPosition();
               }
             });
@@ -77,6 +79,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (_subtitles.isEmpty || _videoPlayerController == null) return;
     
     final currentPosition = _videoPlayerController!.value.position.inMilliseconds;
+    debugPrint('[DEBUG] _syncSubtitleToVideoPosition: currentPosition=$currentPosition, subtitles=${_subtitles.length}');
     _updateCurrentSubtitle(currentPosition);
   }
 
@@ -194,11 +197,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void _onVideoPositionChanged() {
     if (_videoPlayerController != null) {
       final position = _videoPlayerController!.value.position.inMilliseconds;
+      
       if (_videoPlayerController!.value.isPlaying) {
         context.read<VideoStore>().updateVideoPosition(widget.video.id, position);
         
         if (_targetMode && _currentSubtitleIndex >= 0 && _currentSubtitleIndex < _subtitles.length) {
           if(position >= _subtitles[_currentSubtitleIndex].endMs){
+            debugPrint('[DEBUG] Target mode: reached end of subtitle at $position, pausing');
             _videoPlayerController!.pause();
           }          
         }
@@ -214,21 +219,23 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (_subtitles.isEmpty) return;
     
     // Binary search for faster subtitle lookup
-    int newIndex = _binarySearchSubtitle(positionMs);
+    int newIndex = _searchSubtitle(positionMs);
+    
+    debugPrint('[DEBUG] _updateCurrentSubtitle: positionMs=$positionMs, newIndex=$newIndex, total=${_subtitles.length}');
     
     if (newIndex != _currentSubtitleIndex) {
+      debugPrint('[DEBUG] Subtitle changed from $_currentSubtitleIndex to $newIndex');
       setState(() {
         _currentSubtitleIndex = newIndex;
       });
       
       if (newIndex >= 0 && _subtitleScrollController != null) {
-        // Use multiple callbacks to ensure all items are rendered
+        // Scroll to subtitle with retry logic
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) {
-              _scrollToSubtitle(newIndex);
-            }
-          });
+          if (mounted) {
+            debugPrint('[DEBUG] Calling _scrollToSubtitle for index $newIndex');
+            _scrollToSubtitle(newIndex);
+          }
         });
       }
     }
@@ -256,23 +263,82 @@ class _PlayerScreenState extends State<PlayerScreen> {
     return result >= 0 ? result : -1;
   }
 
-  void _scrollToSubtitle(int index) {
-    if (index < 0 || index >= _subtitleKeys.length) return;
+  int _linearSearchSubtitle(int positionMs) {
+    int result = -1;
     
-    final key = _subtitleKeys[index];
-    final context = key.currentContext;
-    if (context != null) {
-      try {
-        Scrollable.ensureVisible(
-          context,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-          alignment: 0.5,
-        );
-      } catch (e) {
-        debugPrint('Failed to scroll to subtitle: $e');
+    for (int i = 0; i < _subtitles.length; i++) {
+      final subtitle = _subtitles[i];
+      
+      if (positionMs >= subtitle.startMs && positionMs < subtitle.endMs) {
+        return i; // Found exact match
+      }
+      
+      if (positionMs >= subtitle.endMs) {
+        result = i; // Keep track of last subtitle before position
       }
     }
+    
+    return result;
+  }
+
+  // Switch between search algorithms - change to _linearSearchSubtitle() to test performance
+  int _searchSubtitle(int positionMs) {
+    return _binarySearchSubtitle(positionMs); // Binary: O(log n) vs Linear: O(n)
+  }
+
+  void _scrollToSubtitle(int index) {
+    if (index < 0 || index >= _subtitles.length || _subtitleScrollController == null) {
+      debugPrint('[DEBUG] _scrollToSubtitle: index $index out of range or no controller');
+      return;
+    }
+    
+    if (!_subtitleScrollController!.hasClients) {
+      debugPrint('[DEBUG] ScrollController has no clients, cannot scroll');
+      return;
+    }
+    
+    // First, try ensureVisible directly
+    if (index < _subtitleKeys.length) {
+      final key = _subtitleKeys[index];
+      final ctx = key.currentContext;
+      if (ctx != null) {
+        debugPrint('[DEBUG] Item $index already rendered, using ensureVisible directly');
+        try {
+          Scrollable.ensureVisible(ctx, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut, alignment: 0.5);
+          return; // Success, no need for jumpTo
+        } catch (e) {
+          debugPrint('[DEBUG] ensureVisible failed: $e, will try jumpTo');
+        }
+      }
+    }
+    
+    // Item not visible, calculate offset and jumpTo
+    final estimatedItemHeight = _averageItemHeight; // Use calculated average height
+    final listViewPadding = 8.0;
+    final targetOffset = listViewPadding + (index * estimatedItemHeight);
+    final viewportHeight = _subtitleScrollController!.position.viewportDimension;
+    final centerOffset = targetOffset - (viewportHeight / 2) + (estimatedItemHeight / 2);
+    final maxScroll = _subtitleScrollController!.position.maxScrollExtent;
+    final finalOffset = centerOffset.clamp(0.0, maxScroll);
+    
+    debugPrint('[DEBUG] Item $index not visible, jumpTo offset=$finalOffset');
+    _subtitleScrollController!.jumpTo(finalOffset);
+    
+    // Then refine with ensureVisible after a delay
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted && index < _subtitleKeys.length) {
+        final key = _subtitleKeys[index];
+        final ctx = key.currentContext;
+        if (ctx != null) {
+          debugPrint('[DEBUG] Refining position of item $index with ensureVisible');
+          try {
+            Scrollable.ensureVisible(ctx, duration: const Duration(milliseconds: 200), curve: Curves.easeInOut, alignment: 0.5);
+          } catch (e) {
+            debugPrint('[DEBUG] Final ensureVisible failed: $e');
+          }
+        }
+      }
+    });
   }
 
   @override
@@ -298,6 +364,28 @@ class _PlayerScreenState extends State<PlayerScreen> {
       // Ignore errors during dispose
     }
     super.dispose();
+  }
+
+  void _calculateAverageItemHeight() {
+    if (_subtitleKeys.isEmpty) return;
+    
+    double totalHeight = 0;
+    int renderedCount = 0;
+    
+    for (int i = 0; i < _subtitleKeys.length && i < 10; i++) {
+      final key = _subtitleKeys[i];
+      final renderObject = key.currentContext?.findRenderObject() as RenderBox?;
+      if (renderObject != null) {
+        totalHeight += renderObject.size.height + 8; // +8 for margin
+        renderedCount++;
+      }
+    }
+    
+    if (renderedCount > 0) {
+      final calculated = totalHeight / renderedCount;
+      debugPrint('[DEBUG] Calculated average item height: $calculated (from $renderedCount items)');
+      _averageItemHeight = calculated;
+    }
   }
 
   void _togglePlayPause() {
@@ -348,10 +436,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
             _isLoadingSubtitles = false;
           });
           
-          // Wait for ListView to fully render all items before scrolling
+          // Scroll to current position after loading
           WidgetsBinding.instance.addPostFrameCallback((_) {
             Future.delayed(const Duration(milliseconds: 100), () {
               if (mounted) {
+                _calculateAverageItemHeight(); // Calculate average height once after loading
                 _syncSubtitleToVideoPosition();
               }
             });
@@ -515,6 +604,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return ListView.builder(
         controller: _subtitleScrollController,
         padding: const EdgeInsets.all(8),
+        cacheExtent: 2000, // Pre-render more items to ensure target is built
         itemCount: _subtitles.length,
         itemBuilder: (context, index) {
           final subtitle = _subtitles[index];
@@ -544,88 +634,92 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Widget _buildSubtitleListItem(SubtitleItem subtitle, int index) {
     final bool isActive = index == _currentSubtitleIndex;
     
-    return Container(
-      key: _subtitleKeys.length > index ? _subtitleKeys[index] : null,
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: isActive ? AppTheme.primaryColor : AppTheme.cardColor,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: isActive ? AppTheme.textColor : AppTheme.primaryColor.withOpacity(0.3),
-          width: isActive ? 2 : 1,
-        ),
-      ),
-      child: GestureDetector(
-        onTap: () async {
-          if (_videoPlayerController != null) {
-            await _videoPlayerController!.seekTo(Duration(milliseconds: subtitle.startMs));
-            if (_targetMode) {
-              _videoPlayerController!.play();
-            }
-          }
-        },
-        onDoubleTap: (isActive)
-            ? () {
-                _togglePlayPause();
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Container(
+          key: _subtitleKeys.length > index ? _subtitleKeys[index] : null,
+          margin: const EdgeInsets.only(bottom: 8),
+          decoration: BoxDecoration(
+            color: isActive ? AppTheme.primaryColor : AppTheme.cardColor,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isActive ? AppTheme.textColor : AppTheme.primaryColor.withOpacity(0.3),
+              width: isActive ? 2 : 1,
+            ),
+          ),
+          child: GestureDetector(
+            onTap: () async {
+              if (_videoPlayerController != null) {
+                await _videoPlayerController!.seekTo(Duration(milliseconds: subtitle.startMs));
+                if (_targetMode) {
+                  _videoPlayerController!.play();
+                }
               }
-            : null,
-        behavior: HitTestBehavior.opaque,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '${_formatDuration(subtitle.startMs)} --> ${_formatDuration(subtitle.endMs)}',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: isActive ? AppTheme.textColor : AppTheme.textColor.withOpacity(0.6),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      subtitle.text,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: isActive ? Colors.black87 : AppTheme.textColor,
-                        fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (isActive)
-                Padding(
-                  padding: const EdgeInsets.only(left: 8),
-                  child: GestureDetector(
-                    onTap: () {
-                      if (_videoPlayerController != null) {
-                        if (_videoPlayerController!.value.isPlaying) {
-                          _videoPlayerController!.pause();
-                        } else {
-                          _videoPlayerController!.play();
-                        }
-                        setState(() {});
-                      }
-                    },
-                    child: Icon(
-                      _videoPlayerController?.value.isPlaying == true
-                          ? Icons.pause_circle_outline
-                          : Icons.play_circle_outline,
-                      color: AppTheme.textColor,
-                      size: 28,
+            },
+            onDoubleTap: (isActive)
+                ? () {
+                    _togglePlayPause();
+                  }
+                : null,
+            behavior: HitTestBehavior.opaque,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${_formatDuration(subtitle.startMs)} --> ${_formatDuration(subtitle.endMs)}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isActive ? AppTheme.textColor : AppTheme.textColor.withOpacity(0.6),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          subtitle.text,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: isActive ? Colors.black87 : AppTheme.textColor,
+                            fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ),
-            ],
+                  if (isActive)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: GestureDetector(
+                        onTap: () {
+                          if (_videoPlayerController != null) {
+                            if (_videoPlayerController!.value.isPlaying) {
+                              _videoPlayerController!.pause();
+                            } else {
+                              _videoPlayerController!.play();
+                            }
+                            setState(() {});
+                          }
+                        },
+                        child: Icon(
+                          _videoPlayerController?.value.isPlaying == true
+                              ? Icons.pause_circle_outline
+                              : Icons.play_circle_outline,
+                          color: AppTheme.textColor,
+                          size: 28,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
