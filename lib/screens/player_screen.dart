@@ -32,7 +32,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   int _currentSubtitleIndex = -1;
   final List<GlobalKey> _subtitleKeys = [];
   int _currentPosition = 0;
-  int? _pauseAfterMs;
+  bool _targetMode = false;
 
   @override
   void initState() {
@@ -57,10 +57,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
             _subtitles = parsed;
           });
           
+          // Wait for ListView to fully render all items
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            _syncSubtitleToVideoPosition();
+            Future.delayed(const Duration(milliseconds: 100), () {
+              if (mounted) {
+                _syncSubtitleToVideoPosition();
+              }
+            });
           });
-          
           debugPrint('Loaded ${parsed.length} existing subtitles');
         }
       } catch (e) {
@@ -193,11 +197,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
       if (_videoPlayerController!.value.isPlaying) {
         context.read<VideoStore>().updateVideoPosition(widget.video.id, position);
         
-        if (_pauseAfterMs != null && position >= _pauseAfterMs!) {
-          _videoPlayerController!.pause();
-          setState(() {
-            _pauseAfterMs = null;
-          });
+        if (_targetMode && _currentSubtitleIndex >= 0 && _currentSubtitleIndex < _subtitles.length) {
+          if(position >= _subtitles[_currentSubtitleIndex].endMs){
+            _videoPlayerController!.pause();
+          }          
         }
       }
       setState(() {
@@ -210,33 +213,47 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void _updateCurrentSubtitle(int positionMs) {
     if (_subtitles.isEmpty) return;
     
-    int newIndex = -1;
-    for (int i = 0; i < _subtitles.length; i++) {
-      if (positionMs >= _subtitles[i].startMs && positionMs < _subtitles[i].endMs) {
-        newIndex = i;
-        break;
-      }
-      if (positionMs >= _subtitles[i].endMs) {
-        if (i + 1 < _subtitles.length && positionMs < _subtitles[i + 1].startMs) {
-          newIndex = i;
-          break;
-        }
-      }
-    }
-    
-    if (newIndex == -1 && positionMs >= _subtitles.last.endMs) {
-      newIndex = _subtitles.length - 1;
-    }
+    // Binary search for faster subtitle lookup
+    int newIndex = _binarySearchSubtitle(positionMs);
     
     if (newIndex != _currentSubtitleIndex) {
       setState(() {
         _currentSubtitleIndex = newIndex;
       });
       
-      if (newIndex >= 0 && _subtitleScrollController != null && _subtitleScrollController!.hasClients) {
-        _scrollToSubtitle(newIndex);
+      if (newIndex >= 0 && _subtitleScrollController != null) {
+        // Use multiple callbacks to ensure all items are rendered
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              _scrollToSubtitle(newIndex);
+            }
+          });
+        });
       }
     }
+  }
+
+  int _binarySearchSubtitle(int positionMs) {
+    int left = 0;
+    int right = _subtitles.length - 1;
+    int result = -1;
+    
+    while (left <= right) {
+      int mid = (left + right) ~/ 2;
+      final subtitle = _subtitles[mid];
+      
+      if (positionMs >= subtitle.startMs && positionMs < subtitle.endMs) {
+        return mid; // Found exact match
+      } else if (positionMs < subtitle.startMs) {
+        right = mid - 1;
+      } else {
+        result = mid; // Keep track of last subtitle before position
+        left = mid + 1;
+      }
+    }
+    
+    return result >= 0 ? result : -1;
   }
 
   void _scrollToSubtitle(int index) {
@@ -245,12 +262,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final key = _subtitleKeys[index];
     final context = key.currentContext;
     if (context != null) {
-      Scrollable.ensureVisible(
-        context,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-        alignment: 0.5,
-      );
+      try {
+        Scrollable.ensureVisible(
+          context,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+          alignment: 0.5,
+        );
+      } catch (e) {
+        debugPrint('Failed to scroll to subtitle: $e');
+      }
     }
   }
 
@@ -326,6 +347,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
             _subtitles = parsed;
             _isLoadingSubtitles = false;
           });
+          
+          // Wait for ListView to fully render all items before scrolling
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            Future.delayed(const Duration(milliseconds: 100), () {
+              if (mounted) {
+                _syncSubtitleToVideoPosition();
+              }
+            });
+          });
+          
           debugPrint('Loaded ${parsed.length} subtitles');
         } catch (e) {
           debugPrint('Failed to parse subtitle: $e');
@@ -435,10 +466,25 @@ class _PlayerScreenState extends State<PlayerScreen> {
         children: [
           IconButton(
             icon: Icon(
+              Icons.gps_fixed,
+              color: _targetMode ? Colors.orange : AppTheme.textColor,
+            ),
+            onPressed: () {
+              setState(() {
+                _targetMode = !_targetMode;
+              });
+              if (_targetMode && _videoPlayerController?.value.isPlaying == true) {
+                _videoPlayerController!.pause();
+              }
+            },
+          ),
+          const Spacer(),
+          IconButton(
+            icon: Icon(
               _videoPlayerController?.value.isPlaying == true ? Icons.pause : Icons.play_arrow,
               color: AppTheme.textColor,
             ),
-            onPressed: _togglePlayPause,
+            onPressed: _togglePlayPause ,
           ),
           const Spacer(),
           IconButton(
@@ -510,12 +556,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
         ),
       ),
       child: GestureDetector(
-        onTap: () {
+        onTap: () async {
           if (_videoPlayerController != null) {
-            _videoPlayerController!.seekTo(Duration(milliseconds: subtitle.startMs));
+            await _videoPlayerController!.seekTo(Duration(milliseconds: subtitle.startMs));
+            if (_targetMode) {
+              _videoPlayerController!.play();
+            }
           }
         },
-        onDoubleTap: isActive
+        onDoubleTap: (isActive)
             ? () {
                 _togglePlayPause();
               }
@@ -523,26 +572,56 @@ class _PlayerScreenState extends State<PlayerScreen> {
         behavior: HitTestBehavior.opaque,
         child: Padding(
           padding: const EdgeInsets.all(12),
-          child: Column(
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                '${_formatDuration(subtitle.startMs)} --> ${_formatDuration(subtitle.endMs)}',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: isActive ? AppTheme.textColor : AppTheme.textColor.withOpacity(0.6),
-                  fontWeight: FontWeight.w500,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${_formatDuration(subtitle.startMs)} --> ${_formatDuration(subtitle.endMs)}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: isActive ? AppTheme.textColor : AppTheme.textColor.withOpacity(0.6),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      subtitle.text,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: isActive ? Colors.black87 : AppTheme.textColor,
+                        fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 6),
-              Text(
-                subtitle.text,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: isActive ? Colors.black87 : AppTheme.textColor,
-                  fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+              if (isActive)
+                Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: GestureDetector(
+                    onTap: () {
+                      if (_videoPlayerController != null) {
+                        if (_videoPlayerController!.value.isPlaying) {
+                          _videoPlayerController!.pause();
+                        } else {
+                          _videoPlayerController!.play();
+                        }
+                        setState(() {});
+                      }
+                    },
+                    child: Icon(
+                      _videoPlayerController?.value.isPlaying == true
+                          ? Icons.pause_circle_outline
+                          : Icons.play_circle_outline,
+                      color: AppTheme.textColor,
+                      size: 28,
+                    ),
+                  ),
                 ),
-              ),
             ],
           ),
         ),
