@@ -32,6 +32,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   int _currentSubtitleIndex = -1;
   final List<GlobalKey> _subtitleKeys = [];
   int _currentPosition = 0;
+  int? _pauseAfterMs;
 
   @override
   void initState() {
@@ -191,6 +192,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
       final position = _videoPlayerController!.value.position.inMilliseconds;
       if (_videoPlayerController!.value.isPlaying) {
         context.read<VideoStore>().updateVideoPosition(widget.video.id, position);
+        
+        if (_pauseAfterMs != null && position >= _pauseAfterMs!) {
+          _videoPlayerController!.pause();
+          setState(() {
+            _pauseAfterMs = null;
+          });
+        }
       }
       setState(() {
         _currentPosition = position;
@@ -339,10 +347,23 @@ class _PlayerScreenState extends State<PlayerScreen> {
       appBar: AppBar(
         backgroundColor: AppTheme.primaryColor,
         foregroundColor: AppTheme.textColor,
-        title: Text(
-          widget.video.name,
-          style: const TextStyle(fontSize: 14),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.video.name,
+              style: const TextStyle(fontSize: 14),
+            ),
+            Text(
+              '${_formatDuration(_currentPosition)} / ${_formatDuration(widget.video.duration)}',
+              style: TextStyle(
+                fontSize: 11,
+                color: AppTheme.textColor.withOpacity(0.8),
+              ),
+            ),
+          ],
         ),
+        toolbarHeight: 60,
       ),
       body: Column(
         children: [
@@ -410,15 +431,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
         ),
       ),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(
-            '${_formatDuration(_currentPosition)} / ${_formatDuration(widget.video.duration)}',
-            style: TextStyle(
-              color: AppTheme.textColor,
-              fontSize: 12,
-            ),
-          ),
-          const Spacer(),
           IconButton(
             icon: Icon(
               _videoPlayerController?.value.isPlaying == true ? Icons.pause : Icons.play_arrow,
@@ -495,13 +509,18 @@ class _PlayerScreenState extends State<PlayerScreen> {
           width: isActive ? 2 : 1,
         ),
       ),
-      child: InkWell(
+      child: GestureDetector(
         onTap: () {
           if (_videoPlayerController != null) {
             _videoPlayerController!.seekTo(Duration(milliseconds: subtitle.startMs));
           }
         },
-        borderRadius: BorderRadius.circular(8),
+        onDoubleTap: isActive
+            ? () {
+                _togglePlayPause();
+              }
+            : null,
+        behavior: HitTestBehavior.opaque,
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Column(
