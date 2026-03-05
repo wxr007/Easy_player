@@ -133,7 +133,7 @@ class _HomeScreenState extends State<HomeScreen> {
             padding: const EdgeInsets.all(10),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
-              childAspectRatio: 0.8,
+              childAspectRatio: 1.2,
               crossAxisSpacing: 10,
               mainAxisSpacing: 10,
             ),
@@ -305,13 +305,13 @@ class _VideoGridItem extends StatelessWidget {
             Expanded(
               flex: 1,
               child: Padding(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(6),
                 child: Text(
                   video.name,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 11,
                     color: AppTheme.textColor,
                     fontWeight: FontWeight.w500,
                   ),
