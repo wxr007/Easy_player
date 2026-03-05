@@ -70,7 +70,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
         video: videoPath,
         imageFormat: ImageFormat.JPEG,
         timeMs: currentPositionMs,
-        maxWidth: 800,
+        maxWidth: 600,
         quality: 80,
       );
       if (data != null) {
