@@ -27,6 +27,41 @@ class PlayerScreen extends StatefulWidget {
   State<PlayerScreen> createState() => _PlayerScreenState();
 }
 
+// Lightweight chip widget used in the Video Info dialog for a clean, grid-like layout
+class _VideoInfoChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _VideoInfoChip({required this.icon, required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      color: AppTheme.cardColor,
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 18, color: AppTheme.textColor),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: TextStyle(fontSize: 12, color: AppTheme.textColor.withOpacity(0.9))),
+                Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppTheme.textColor)),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _PlayerScreenState extends State<PlayerScreen> {
   VideoPlayerController? _videoPlayerController;
   ChewieController? _chewieController;
@@ -567,47 +602,20 @@ class _PlayerScreenState extends State<PlayerScreen> {
             '视频信息',
             style: TextStyle(color: AppTheme.textColor),
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '视频名称: ${widget.video.name}',
-                style: TextStyle(color: AppTheme.textColor),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '时长: ${_formatDuration(widget.video.duration)}',
-                style: TextStyle(color: AppTheme.textColor),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '分辨率: ${resolution}',
-                style: TextStyle(color: AppTheme.textColor),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '大小: ${sizeMB} MB',
-                style: TextStyle(color: AppTheme.textColor),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '比特率: ${bitrateText}',
-                style: TextStyle(color: AppTheme.textColor),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '宽高比: ${_videoAspectRatio.toStringAsFixed(2)}',
-                style: TextStyle(color: AppTheme.textColor),
-              ),
-              if (widget.video.subtitleName != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  '字幕: ${widget.video.subtitleName}',
-                  style: TextStyle(color: AppTheme.textColor),
-                ),
+          content: SingleChildScrollView(
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                _VideoInfoChip(icon: Icons.access_time, label: '时长', value: _formatDuration(widget.video.duration)),
+                _VideoInfoChip(icon: Icons.aspect_ratio, label: '分辨率', value: resolution),
+                _VideoInfoChip(icon: Icons.sd_card, label: '大小', value: '$sizeMB MB'),
+                _VideoInfoChip(icon: Icons.speed, label: '比特率', value: bitrateText),
+                _VideoInfoChip(icon: Icons.dashboard, label: '宽高比', value: '${_videoAspectRatio.toStringAsFixed(2)}'),
+                if (widget.video.subtitleName != null)
+                  _VideoInfoChip(icon: Icons.subtitles, label: '字幕', value: widget.video.subtitleName!),
               ],
-            ],
+            ),
           ),
           actions: [
             TextButton(
