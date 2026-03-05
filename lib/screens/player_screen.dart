@@ -1,5 +1,7 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
@@ -34,10 +36,18 @@ class _PlayerScreenState extends State<PlayerScreen> {
   int _currentPosition = 0;
   bool _targetMode = false;
   double _averageItemHeight = 90.0; // Will be updated after first calculation
+  bool _isFullScreen = false;
+  double _videoAspectRatio = 16.0 / 9.0; // Default aspect ratio
+  bool _isDraggingProgress = false;
+  int _draggedPosition = 0;
+  bool _showFullScreenControls = true; // Show controls in fullscreen by default
+  Timer? _fullScreenControlsTimer; // Auto-hide controls timer
 
   @override
   void initState() {
     super.initState();
+    // Set system UI mode to edgeToEdge at the start
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     _subtitleScrollController = ScrollController();
     _initializePlayer();
     _loadExistingSubtitles();
@@ -117,9 +127,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
         looping: true,
         allowFullScreen: true,
         allowMuting: true,
-        showControls: true,
+        showControls: false,
         showControlsOnInitialize: false,
-        hideControlsTimer: const Duration(seconds: 2),
         overlay: Container(
           color: Colors.transparent,
         ),
@@ -158,6 +167,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
         },
       );
        
+      // Record video aspect ratio
+      if (_videoPlayerController!.value.isInitialized) {
+        setState(() {
+          _videoAspectRatio = _videoPlayerController!.value.aspectRatio;
+          debugPrint('[DEBUG] Video aspect ratio: $_videoAspectRatio');
+        });
+      }
+      
       _videoPlayerController!.addListener(_onVideoPositionChanged);
       
       _syncSubtitleToVideoPosition();
@@ -344,6 +361,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
   @override
   void dispose() {
     try {
+      // Cancel auto-hide timer
+      _fullScreenControlsTimer?.cancel();
+      
+      // Restore portrait orientation
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+      ]);
+      
       if (_videoPlayerController != null) {
         _videoPlayerController!.removeListener(_onVideoPositionChanged);
         if (_videoPlayerController!.value.isPlaying) {
@@ -396,6 +422,251 @@ class _PlayerScreenState extends State<PlayerScreen> {
         _videoPlayerController!.play();
       }
     }
+  }
+
+  void _toggleFullScreenControls() {
+    // Cancel existing timer
+    _fullScreenControlsTimer?.cancel();
+    
+    setState(() {
+      _showFullScreenControls = !_showFullScreenControls;
+    });
+    
+    // Auto-hide controls after 3 seconds if they're visible
+    if (_showFullScreenControls) {
+      _fullScreenControlsTimer = Timer(const Duration(seconds: 3), () {
+        if (mounted && _isFullScreen) {
+          setState(() {
+            _showFullScreenControls = false;
+          });
+        }
+      });
+    }
+  }
+
+  Future<void> _enterFullScreen() async {
+    // Hide system UI
+    // await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    
+    // Determine orientation based on aspect ratio
+    // landscape if aspectRatio > 1.0 (width > height), portrait if < 1.0
+    if (_videoAspectRatio > 1.2) {
+      // Landscape video
+      await SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+    } else {
+      // Portrait or square video
+      await SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+      ]);
+    }
+    
+    setState(() {
+      _isFullScreen = true;
+      _showFullScreenControls = false; // Hide controls when entering fullscreen
+      _fullScreenControlsTimer?.cancel(); // Cancel any existing timer
+    });
+  }
+
+  Future<void> _exitFullScreen() async {
+    // Always restore to portrait when exiting
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+    
+    // Update the UI state
+    setState(() {
+      _isFullScreen = false;
+    });
+  }
+
+  Widget _buildFullScreenPlayer() {
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) {
+          _exitFullScreen();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: _chewieController != null
+            ? Stack(
+                fit: StackFit.expand,
+                children: [
+                  Center(
+                    child: AspectRatio(
+                      aspectRatio: _videoAspectRatio,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: _toggleFullScreenControls,
+                        onDoubleTap: () {
+                          debugPrint('onDoubleTap triggered in fullscreen');
+                          _togglePlayPause();
+                        },
+                        child: Chewie(
+                          controller: _chewieController!,
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Toolbar (progress bar + controls, toggleable)
+                  if (_showFullScreenControls)
+                    Positioned(
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      child: _buildFullScreenToolbar(),
+                    ),
+                ],
+              )
+            : const Center(
+                child: CircularProgressIndicator(color: Colors.white),
+              ),
+      ),
+    );
+  }
+
+  Widget _buildFullScreenToolbar() {
+    final duration = widget.video.duration;
+    final position = _isDraggingProgress ? _draggedPosition : _currentPosition;
+    
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.transparent,
+            Colors.black.withOpacity(0.7),
+          ],
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Draggable progress bar
+          GestureDetector(
+            onHorizontalDragUpdate: (details) {
+              if (duration <= 0) return;
+              
+              final renderBox = context.findRenderObject() as RenderBox?;
+              if (renderBox == null) return;
+              
+              final localPosition = renderBox.globalToLocal(details.globalPosition);
+              final containerWidth = renderBox.size.width;
+              
+              final progress = (localPosition.dx / containerWidth).clamp(0.0, 1.0);
+              
+              setState(() {
+                _isDraggingProgress = true;
+                _draggedPosition = (progress * duration).toInt();
+              });
+            },
+            onHorizontalDragEnd: (details) {
+              if (_isDraggingProgress && _videoPlayerController != null) {
+                _videoPlayerController!.seekTo(Duration(milliseconds: _draggedPosition));
+              }
+              
+              setState(() {
+                _isDraggingProgress = false;
+              });
+            },
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: Container(
+                height: 8,
+                color: Colors.transparent,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final progress = duration > 0 ? (position / duration).clamp(0.0, 1.0) : 0.0;
+                    final progressWidth = progress * constraints.maxWidth;
+                    
+                    return Stack(
+                      alignment: Alignment.centerLeft,
+                      children: [
+                        Container(
+                          width: double.infinity,
+                          height: 3,
+                          color: Colors.white30,
+                        ),
+                        Container(
+                          width: progressWidth,
+                          height: 3,
+                          color: Colors.red,
+                        ),
+                        if (_isDraggingProgress)
+                          Positioned(
+                            left: (progressWidth - 3).clamp(0.0, constraints.maxWidth - 6),
+                            child: Container(
+                              width: 6,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(3),
+                              ),
+                            ),
+                          ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+          // Control buttons
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // Time display and settings
+                Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.settings, color: Colors.white),
+                      onPressed: () {
+                        debugPrint('Settings button pressed');
+                        // TODO: 实现设置功能
+                      },
+                    ),
+                    Text(
+                      _formatDuration(position),
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                    ),
+                  ],
+                ),
+                // Play/Pause button (center)
+                IconButton(
+                  icon: Icon(
+                    _videoPlayerController?.value.isPlaying == true ? Icons.pause : Icons.play_arrow,
+                    color: Colors.white,
+                  ),
+                  onPressed: _togglePlayPause,
+                ),
+                // Duration and exit button
+                Row(
+                  children: [
+                    Text(
+                      _formatDuration(duration),
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.fullscreen_exit, color: Colors.white),
+                      onPressed: _exitFullScreen,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   String _formatDuration(int milliseconds) {
@@ -460,8 +731,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
   }
 
+
   @override
   Widget build(BuildContext context) {
+    if (_isFullScreen) {
+      return _buildFullScreenPlayer();
+    }
+    
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
       appBar: AppBar(
@@ -531,6 +807,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                           )
                         : Center(child: Text('无法加载播放器', style: TextStyle(color: AppTheme.textColor))),
           ),
+          _buildProgressBar(),
           Expanded(
             child: _buildSubtitleSection(),
           ),
@@ -541,49 +818,156 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Widget _buildToolbar() {
+    final position = _isDraggingProgress ? _draggedPosition : _currentPosition;
+    final duration = widget.video.duration;
+    
     return Container(
-      height: 50,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: AppTheme.primaryColor,
-        border: Border(
-          top: BorderSide(color: AppTheme.primaryColor.withOpacity(0.3)),
+      color: AppTheme.primaryColor,
+      child: Container(
+        height: 60,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            IconButton(
+              icon: Icon(
+                Icons.settings,
+                color: AppTheme.textColor,
+              ),
+              onPressed: () {
+                debugPrint('Settings button pressed');
+                // TODO: 实现设置功能
+              },
+            ),
+            const Spacer(),
+            IconButton(
+              icon: Icon(
+                Icons.gps_fixed,
+                color: _targetMode ? Colors.orange : AppTheme.textColor,
+              ),
+              onPressed: () {
+                setState(() {
+                  _targetMode = !_targetMode;
+                });
+                if (_targetMode && _videoPlayerController?.value.isPlaying == true) {
+                  _videoPlayerController!.pause();
+                }
+              },
+            ),
+            const Spacer(),
+            IconButton(
+              icon: Icon(
+                _videoPlayerController?.value.isPlaying == true ? Icons.pause : Icons.play_arrow,
+                color: AppTheme.textColor,
+              ),
+              onPressed: _togglePlayPause,
+            ),
+            const Spacer(),
+            IconButton(
+              icon: Icon(
+                widget.video.subtitlePath != null ? Icons.subtitles : Icons.subtitles_off,
+                color: AppTheme.textColor,
+              ),
+              onPressed: _pickSubtitle,
+            ),
+            const Spacer(),
+            IconButton(
+              icon: Icon(
+                _isFullScreen ? Icons.fullscreen_exit : Icons.fullscreen,
+                color: AppTheme.textColor,
+              ),
+              onPressed: () {
+                if (_isFullScreen) {
+                  _exitFullScreen();
+                } else {
+                  _enterFullScreen();
+                }
+              },
+            ),
+          ],
         ),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          IconButton(
-            icon: Icon(
-              Icons.gps_fixed,
-              color: _targetMode ? Colors.orange : AppTheme.textColor,
+    );
+  }
+
+  Widget _buildProgressBar() {
+    final duration = widget.video.duration;
+    final position = _isDraggingProgress ? _draggedPosition : _currentPosition;
+    
+    return Container(
+      color: AppTheme.primaryColor,
+      child: GestureDetector(
+        onHorizontalDragUpdate: (details) {
+          if (duration <= 0) return;
+          
+          final renderBox = context.findRenderObject() as RenderBox?;
+          if (renderBox == null) return;
+          
+          // Get the local position within the progress bar area
+          final localPosition = renderBox.globalToLocal(details.globalPosition);
+          final containerWidth = renderBox.size.width;
+          
+          // Calculate progress from 0 to 1
+          final progress = (localPosition.dx / containerWidth).clamp(0.0, 1.0);
+          
+          setState(() {
+            _isDraggingProgress = true;
+            _draggedPosition = (progress * duration).toInt();
+          });
+        },
+        onHorizontalDragEnd: (details) {
+          if (_isDraggingProgress && _videoPlayerController != null) {
+            _videoPlayerController!.seekTo(Duration(milliseconds: _draggedPosition));
+          }
+          
+          setState(() {
+            _isDraggingProgress = false;
+          });
+        },
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: Container(
+            height: 8,
+            color: Colors.transparent,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final progress = duration > 0 ? (position / duration).clamp(0.0, 1.0) : 0.0;
+                final progressWidth = progress * constraints.maxWidth;
+                
+                return Stack(
+                  alignment: Alignment.centerLeft,
+                  children: [
+                    // Background
+                    Container(
+                      width: double.infinity,
+                      height: 3,
+                      color: AppTheme.primaryColor.withOpacity(0.3),
+                    ),
+                    // Progress
+                    Container(
+                      width: progressWidth,
+                      height: 3,
+                      color: Colors.red,
+                    ),
+                    // Draggable thumb
+                    if (_isDraggingProgress)
+                      Positioned(
+                        left: (progressWidth - 3).clamp(0.0, constraints.maxWidth - 6),
+                        child: Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
             ),
-            onPressed: () {
-              setState(() {
-                _targetMode = !_targetMode;
-              });
-              if (_targetMode && _videoPlayerController?.value.isPlaying == true) {
-                _videoPlayerController!.pause();
-              }
-            },
           ),
-          const Spacer(),
-          IconButton(
-            icon: Icon(
-              _videoPlayerController?.value.isPlaying == true ? Icons.pause : Icons.play_arrow,
-              color: AppTheme.textColor,
-            ),
-            onPressed: _togglePlayPause ,
-          ),
-          const Spacer(),
-          IconButton(
-            icon: Icon(
-              widget.video.subtitlePath != null ? Icons.subtitles : Icons.subtitles_off,
-              color: AppTheme.textColor,
-            ),
-            onPressed: _pickSubtitle,
-          ),
-        ],
+        ),
       ),
     );
   }
