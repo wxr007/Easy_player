@@ -484,23 +484,17 @@ class _PlayerScreenState extends State<PlayerScreen> {
       position: position,
       isDragging: _isDraggingProgress,
       isPlaying: _videoPlayerController?.value.isPlaying ?? false,
-      onDragUpdate: (details) {
-        if (duration <= 0) return;
-        
-        final renderBox = context.findRenderObject() as RenderBox?;
-        if (renderBox == null) return;
-        
-        final localPosition = renderBox.globalToLocal(details.globalPosition);
-        final containerWidth = renderBox.size.width;
-        
-        final progress = (localPosition.dx / containerWidth).clamp(0.0, 1.0);
-        
+      onDragStart: () {
         setState(() {
           _isDraggingProgress = true;
-          _draggedPosition = (progress * duration).toInt();
         });
       },
-      onDragEnd: (details) {
+      onPositionChanged: (newPosition) {
+        setState(() {
+          _draggedPosition = newPosition;
+        });
+      },
+      onDragEnd: () {
         if (_isDraggingProgress && _videoPlayerController != null) {
           _videoPlayerController!.seekTo(Duration(milliseconds: _draggedPosition));
         }
@@ -699,23 +693,17 @@ class _PlayerScreenState extends State<PlayerScreen> {
       duration: duration,
       position: position,
       isDragging: _isDraggingProgress,
-      onDragUpdate: (details) {
-        if (duration <= 0) return;
-        
-        final renderBox = context.findRenderObject() as RenderBox?;
-        if (renderBox == null) return;
-        
-        final localPosition = renderBox.globalToLocal(details.globalPosition);
-        final containerWidth = renderBox.size.width;
-        
-        final progress = (localPosition.dx / containerWidth).clamp(0.0, 1.0);
-        
+      onDragStart: () {
         setState(() {
           _isDraggingProgress = true;
-          _draggedPosition = (progress * duration).toInt();
         });
       },
-      onDragEnd: (details) {
+      onPositionChanged: (newPosition) {
+        setState(() {
+          _draggedPosition = newPosition;
+        });
+      },
+      onDragEnd: () {
         if (_isDraggingProgress && _videoPlayerController != null) {
           _videoPlayerController!.seekTo(Duration(milliseconds: _draggedPosition));
         }
