@@ -11,6 +11,10 @@ import '../models/video_item.dart';
 import '../models/subtitle_item.dart';
 import '../stores/video_store.dart';
 import '../utils/subtitle_parser.dart';
+import 'player_subtitle_search.dart';
+import 'player_fullscreen.dart';
+import 'player_subtitle_list.dart';
+import 'player_progress_bar.dart';
 
 class PlayerScreen extends StatefulWidget {
   final VideoItem video;
@@ -259,48 +263,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   int _binarySearchSubtitle(int positionMs) {
-    int left = 0;
-    int right = _subtitles.length - 1;
-    int result = -1;
-    
-    while (left <= right) {
-      int mid = (left + right) ~/ 2;
-      final subtitle = _subtitles[mid];
-      
-      if (positionMs >= subtitle.startMs && positionMs < subtitle.endMs) {
-        return mid; // Found exact match
-      } else if (positionMs < subtitle.startMs) {
-        right = mid - 1;
-      } else {
-        result = mid; // Keep track of last subtitle before position
-        left = mid + 1;
-      }
-    }
-    
-    return result >= 0 ? result : -1;
+    return SubtitleSearch.binarySearch(_subtitles, positionMs);
   }
 
   int _linearSearchSubtitle(int positionMs) {
-    int result = -1;
-    
-    for (int i = 0; i < _subtitles.length; i++) {
-      final subtitle = _subtitles[i];
-      
-      if (positionMs >= subtitle.startMs && positionMs < subtitle.endMs) {
-        return i; // Found exact match
-      }
-      
-      if (positionMs >= subtitle.endMs) {
-        result = i; // Keep track of last subtitle before position
-      }
-    }
-    
-    return result;
+    return SubtitleSearch.linearSearch(_subtitles, positionMs);
   }
 
   // Switch between search algorithms - change to _linearSearchSubtitle() to test performance
   int _searchSubtitle(int positionMs) {
-    return _binarySearchSubtitle(positionMs); // Binary: O(log n) vs Linear: O(n)
+    return SubtitleSearch.search(_subtitles, positionMs);
   }
 
   void _scrollToSubtitle(int index) {
@@ -485,49 +457,21 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Widget _buildFullScreenPlayer() {
-    return PopScope(
-      canPop: true,
-      onPopInvokedWithResult: (didPop, result) {
+    return FullscreenPlayer(
+      chewieController: _chewieController,
+      videoAspectRatio: _videoAspectRatio,
+      showControls: _showFullScreenControls,
+      onTap: _toggleFullScreenControls,
+      onDoubleTap: () {
+        debugPrint('onDoubleTap triggered in fullscreen');
+        _togglePlayPause();
+      },
+      toolbarWidget: _buildFullScreenToolbar(),
+      onPopInvoked: (didPop, result) {
         if (didPop) {
           _exitFullScreen();
         }
       },
-      child: Scaffold(
-        backgroundColor: Colors.black,
-        body: _chewieController != null
-            ? Stack(
-                fit: StackFit.expand,
-                children: [
-                  Center(
-                    child: AspectRatio(
-                      aspectRatio: _videoAspectRatio,
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: _toggleFullScreenControls,
-                        onDoubleTap: () {
-                          debugPrint('onDoubleTap triggered in fullscreen');
-                          _togglePlayPause();
-                        },
-                        child: Chewie(
-                          controller: _chewieController!,
-                        ),
-                      ),
-                    ),
-                  ),
-                  // Toolbar (progress bar + controls, toggleable)
-                  if (_showFullScreenControls)
-                    Positioned(
-                      bottom: 0,
-                      left: 0,
-                      right: 0,
-                      child: _buildFullScreenToolbar(),
-                    ),
-                ],
-              )
-            : const Center(
-                child: CircularProgressIndicator(color: Colors.white),
-              ),
-      ),
     );
   }
 
@@ -535,137 +479,39 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final duration = widget.video.duration;
     final position = _isDraggingProgress ? _draggedPosition : _currentPosition;
     
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Colors.transparent,
-            Colors.black.withOpacity(0.7),
-          ],
-        ),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Draggable progress bar
-          GestureDetector(
-            onHorizontalDragUpdate: (details) {
-              if (duration <= 0) return;
-              
-              final renderBox = context.findRenderObject() as RenderBox?;
-              if (renderBox == null) return;
-              
-              final localPosition = renderBox.globalToLocal(details.globalPosition);
-              final containerWidth = renderBox.size.width;
-              
-              final progress = (localPosition.dx / containerWidth).clamp(0.0, 1.0);
-              
-              setState(() {
-                _isDraggingProgress = true;
-                _draggedPosition = (progress * duration).toInt();
-              });
-            },
-            onHorizontalDragEnd: (details) {
-              if (_isDraggingProgress && _videoPlayerController != null) {
-                _videoPlayerController!.seekTo(Duration(milliseconds: _draggedPosition));
-              }
-              
-              setState(() {
-                _isDraggingProgress = false;
-              });
-            },
-            child: MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: Container(
-                height: 8,
-                color: Colors.transparent,
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final progress = duration > 0 ? (position / duration).clamp(0.0, 1.0) : 0.0;
-                    final progressWidth = progress * constraints.maxWidth;
-                    
-                    return Stack(
-                      alignment: Alignment.centerLeft,
-                      children: [
-                        Container(
-                          width: double.infinity,
-                          height: 3,
-                          color: Colors.white30,
-                        ),
-                        Container(
-                          width: progressWidth,
-                          height: 3,
-                          color: Colors.red,
-                        ),
-                        if (_isDraggingProgress)
-                          Positioned(
-                            left: (progressWidth - 3).clamp(0.0, constraints.maxWidth - 6),
-                            child: Container(
-                              width: 6,
-                              height: 6,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(3),
-                              ),
-                            ),
-                          ),
-                      ],
-                    );
-                  },
-                ),
-              ),
-            ),
-          ),
-          // Control buttons
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                // Time display and settings
-                Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.settings, color: Colors.white),
-                      onPressed: () {
-                        debugPrint('Settings button pressed');
-                        // TODO: 实现设置功能
-                      },
-                    ),
-                    Text(
-                      _formatDuration(position),
-                      style: const TextStyle(color: Colors.white, fontSize: 12),
-                    ),
-                  ],
-                ),
-                // Play/Pause button (center)
-                IconButton(
-                  icon: Icon(
-                    _videoPlayerController?.value.isPlaying == true ? Icons.pause : Icons.play_arrow,
-                    color: Colors.white,
-                  ),
-                  onPressed: _togglePlayPause,
-                ),
-                // Duration and exit button
-                Row(
-                  children: [
-                    Text(
-                      _formatDuration(duration),
-                      style: const TextStyle(color: Colors.white, fontSize: 12),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.fullscreen_exit, color: Colors.white),
-                      onPressed: _exitFullScreen,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+    return FullscreenToolbar(
+      duration: duration,
+      position: position,
+      isDragging: _isDraggingProgress,
+      isPlaying: _videoPlayerController?.value.isPlaying ?? false,
+      onDragUpdate: (details) {
+        if (duration <= 0) return;
+        
+        final renderBox = context.findRenderObject() as RenderBox?;
+        if (renderBox == null) return;
+        
+        final localPosition = renderBox.globalToLocal(details.globalPosition);
+        final containerWidth = renderBox.size.width;
+        
+        final progress = (localPosition.dx / containerWidth).clamp(0.0, 1.0);
+        
+        setState(() {
+          _isDraggingProgress = true;
+          _draggedPosition = (progress * duration).toInt();
+        });
+      },
+      onDragEnd: (details) {
+        if (_isDraggingProgress && _videoPlayerController != null) {
+          _videoPlayerController!.seekTo(Duration(milliseconds: _draggedPosition));
+        }
+        
+        setState(() {
+          _isDraggingProgress = false;
+        });
+      },
+      onPlayPauseTap: _togglePlayPause,
+      onExitFullscreenTap: _exitFullScreen,
+      formatDuration: _formatDuration,
     );
   }
 
@@ -818,75 +664,30 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Widget _buildToolbar() {
-    final position = _isDraggingProgress ? _draggedPosition : _currentPosition;
-    final duration = widget.video.duration;
-    
-    return Container(
-      color: AppTheme.primaryColor,
-      child: Container(
-        height: 60,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            IconButton(
-              icon: Icon(
-                Icons.settings,
-                color: AppTheme.textColor,
-              ),
-              onPressed: () {
-                debugPrint('Settings button pressed');
-                // TODO: 实现设置功能
-              },
-            ),
-            const Spacer(),
-            IconButton(
-              icon: Icon(
-                Icons.gps_fixed,
-                color: _targetMode ? Colors.orange : AppTheme.textColor,
-              ),
-              onPressed: () {
-                setState(() {
-                  _targetMode = !_targetMode;
-                });
-                if (_targetMode && _videoPlayerController?.value.isPlaying == true) {
-                  _videoPlayerController!.pause();
-                }
-              },
-            ),
-            const Spacer(),
-            IconButton(
-              icon: Icon(
-                _videoPlayerController?.value.isPlaying == true ? Icons.pause : Icons.play_arrow,
-                color: AppTheme.textColor,
-              ),
-              onPressed: _togglePlayPause,
-            ),
-            const Spacer(),
-            IconButton(
-              icon: Icon(
-                widget.video.subtitlePath != null ? Icons.subtitles : Icons.subtitles_off,
-                color: AppTheme.textColor,
-              ),
-              onPressed: _pickSubtitle,
-            ),
-            const Spacer(),
-            IconButton(
-              icon: Icon(
-                _isFullScreen ? Icons.fullscreen_exit : Icons.fullscreen,
-                color: AppTheme.textColor,
-              ),
-              onPressed: () {
-                if (_isFullScreen) {
-                  _exitFullScreen();
-                } else {
-                  _enterFullScreen();
-                }
-              },
-            ),
-          ],
-        ),
-      ),
+    return PlayerToolbar(
+      isTargetMode: _targetMode,
+      isPlaying: _videoPlayerController?.value.isPlaying ?? false,
+      hasSubtitle: widget.video.subtitlePath != null,
+      onSettingsTap: () {
+        debugPrint('Settings button pressed');
+      },
+      onTargetModeTap: () {
+        setState(() {
+          _targetMode = !_targetMode;
+        });
+        if (_targetMode && _videoPlayerController?.value.isPlaying == true) {
+          _videoPlayerController!.pause();
+        }
+      },
+      onPlayPauseTap: _togglePlayPause,
+      onSubtitleTap: _pickSubtitle,
+      onFullscreenTap: () {
+        if (_isFullScreen) {
+          _exitFullScreen();
+        } else {
+          _enterFullScreen();
+        }
+      },
     );
   }
 
@@ -894,111 +695,65 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final duration = widget.video.duration;
     final position = _isDraggingProgress ? _draggedPosition : _currentPosition;
     
-    return Container(
-      color: AppTheme.primaryColor,
-      child: GestureDetector(
-        onHorizontalDragUpdate: (details) {
-          if (duration <= 0) return;
-          
-          final renderBox = context.findRenderObject() as RenderBox?;
-          if (renderBox == null) return;
-          
-          // Get the local position within the progress bar area
-          final localPosition = renderBox.globalToLocal(details.globalPosition);
-          final containerWidth = renderBox.size.width;
-          
-          // Calculate progress from 0 to 1
-          final progress = (localPosition.dx / containerWidth).clamp(0.0, 1.0);
-          
-          setState(() {
-            _isDraggingProgress = true;
-            _draggedPosition = (progress * duration).toInt();
-          });
-        },
-        onHorizontalDragEnd: (details) {
-          if (_isDraggingProgress && _videoPlayerController != null) {
-            _videoPlayerController!.seekTo(Duration(milliseconds: _draggedPosition));
-          }
-          
-          setState(() {
-            _isDraggingProgress = false;
-          });
-        },
-        child: MouseRegion(
-          cursor: SystemMouseCursors.click,
-          child: Container(
-            height: 8,
-            color: Colors.transparent,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final progress = duration > 0 ? (position / duration).clamp(0.0, 1.0) : 0.0;
-                final progressWidth = progress * constraints.maxWidth;
-                
-                return Stack(
-                  alignment: Alignment.centerLeft,
-                  children: [
-                    // Background
-                    Container(
-                      width: double.infinity,
-                      height: 3,
-                      color: AppTheme.primaryColor.withOpacity(0.3),
-                    ),
-                    // Progress
-                    Container(
-                      width: progressWidth,
-                      height: 3,
-                      color: Colors.red,
-                    ),
-                    // Draggable thumb
-                    if (_isDraggingProgress)
-                      Positioned(
-                        left: (progressWidth - 3).clamp(0.0, constraints.maxWidth - 6),
-                        child: Container(
-                          width: 6,
-                          height: 6,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(3),
-                          ),
-                        ),
-                      ),
-                  ],
-                );
-              },
-            ),
-          ),
-        ),
-      ),
+    return ProgressBar(
+      duration: duration,
+      position: position,
+      isDragging: _isDraggingProgress,
+      onDragUpdate: (details) {
+        if (duration <= 0) return;
+        
+        final renderBox = context.findRenderObject() as RenderBox?;
+        if (renderBox == null) return;
+        
+        final localPosition = renderBox.globalToLocal(details.globalPosition);
+        final containerWidth = renderBox.size.width;
+        
+        final progress = (localPosition.dx / containerWidth).clamp(0.0, 1.0);
+        
+        setState(() {
+          _isDraggingProgress = true;
+          _draggedPosition = (progress * duration).toInt();
+        });
+      },
+      onDragEnd: (details) {
+        if (_isDraggingProgress && _videoPlayerController != null) {
+          _videoPlayerController!.seekTo(Duration(milliseconds: _draggedPosition));
+        }
+        
+        setState(() {
+          _isDraggingProgress = false;
+        });
+      },
     );
   }
 
   Widget _buildSubtitleSection() {
     if (widget.video.subtitlePath != null && widget.video.subtitleName != null) {
-      if (_isLoadingSubtitles) {
-        return Center(child: CircularProgressIndicator(color: AppTheme.primaryColor));
-      }
-      if (_subtitles.isEmpty) {
-        return Center(
-          child: Text(
-            '无法解析字幕文件',
-            style: TextStyle(color: AppTheme.textColor.withOpacity(0.6)),
-          ),
-        );
-      }
-      return ListView.builder(
-        controller: _subtitleScrollController,
-        padding: const EdgeInsets.all(8),
-        cacheExtent: 8000, // Pre-render more items to ensure target is built
-        itemCount: _subtitles.length,
-        itemBuilder: (context, index) {
-          final subtitle = _subtitles[index];
-          return _buildSubtitleListItem(subtitle, index);
+      return SubtitleListWidget(
+        subtitles: _subtitles,
+        isLoading: _isLoadingSubtitles,
+        scrollController: _subtitleScrollController,
+        subtitleKeys: _subtitleKeys,
+        currentSubtitleIndex: _currentSubtitleIndex,
+        isPlaying: _videoPlayerController?.value.isPlaying ?? false,
+        onSubtitleTap: (subtitle) async {
+          if (_videoPlayerController != null) {
+            await _videoPlayerController!.seekTo(Duration(milliseconds: subtitle.startMs));
+            if (_targetMode) {
+              _videoPlayerController!.play();
+            }
+          }
         },
+        onPlayPauseTap: () {
+          _togglePlayPause();
+        },
+        onAddSubtitleTap: _pickSubtitle,
+        formatDuration: _formatDuration,
       );
     } else {
       return Center(
         child: InkWell(
-          onTap: _pickSubtitle,
+          onTap: () => _pickSubtitle().ignore(),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -1015,95 +770,5 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
   }
 
-  Widget _buildSubtitleListItem(SubtitleItem subtitle, int index) {
-    final bool isActive = index == _currentSubtitleIndex;
-    
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return Container(
-          key: _subtitleKeys.length > index ? _subtitleKeys[index] : null,
-          margin: const EdgeInsets.only(bottom: 8),
-          decoration: BoxDecoration(
-            color: isActive ? AppTheme.primaryColor : AppTheme.cardColor,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: isActive ? AppTheme.textColor : AppTheme.primaryColor.withOpacity(0.3),
-              width: isActive ? 2 : 1,
-            ),
-          ),
-          child: GestureDetector(
-            onTap: () async {
-              if (_videoPlayerController != null) {
-                await _videoPlayerController!.seekTo(Duration(milliseconds: subtitle.startMs));
-                if (_targetMode) {
-                  _videoPlayerController!.play();
-                }
-              }
-            },
-            onDoubleTap: (isActive)
-                ? () {
-                    _togglePlayPause();
-                  }
-                : null,
-            behavior: HitTestBehavior.opaque,
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${_formatDuration(subtitle.startMs)} --> ${_formatDuration(subtitle.endMs)}',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: isActive ? AppTheme.textColor : AppTheme.textColor.withOpacity(0.6),
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          subtitle.text,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: isActive ? Colors.black87 : AppTheme.textColor,
-                            fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (isActive)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 8),
-                      child: GestureDetector(
-                        onTap: () {
-                          if (_videoPlayerController != null) {
-                            if (_videoPlayerController!.value.isPlaying) {
-                              _videoPlayerController!.pause();
-                            } else {
-                              _videoPlayerController!.play();
-                            }
-                            setState(() {});
-                          }
-                        },
-                        child: Icon(
-                          _videoPlayerController?.value.isPlaying == true
-                              ? Icons.pause_circle_outline
-                              : Icons.play_circle_outline,
-                          color: AppTheme.textColor,
-                          size: 28,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
 }
+
