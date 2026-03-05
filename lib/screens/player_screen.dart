@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
+import 'dart:convert';
+import 'package:video_thumbnail/video_thumbnail.dart';
 import 'package:file_picker/file_picker.dart';
 import '../theme/app_theme.dart';
 import '../models/video_item.dart';
@@ -55,6 +57,34 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _subtitleScrollController = ScrollController();
     _initializePlayer();
     _loadExistingSubtitles();
+  }
+
+  // Capture current frame as cover and update thumbnail in store
+  Future<void> _captureCover() async {
+    try {
+      if (_videoPlayerController == null) return;
+      final currentPositionMs = _videoPlayerController!.value.position.inMilliseconds;
+      final videoPath = widget.video.path;
+      if (videoPath.isEmpty) return;
+      final data = await VideoThumbnail.thumbnailData(
+        video: videoPath,
+        imageFormat: ImageFormat.JPEG,
+        timeMs: currentPositionMs,
+        maxWidth: 800,
+        quality: 80,
+      );
+      if (data != null) {
+        final base64Image = base64Encode(data);
+        await context.read<VideoStore>().updateThumbnail(widget.video.id, base64Image);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('封面已更新'), duration: Duration(seconds: 2)),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to capture cover: $e');
+    }
   }
 
   Future<void> _loadExistingSubtitles() async {
@@ -499,7 +529,35 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
-  void _showVideoInfo(BuildContext context) {
+  Future<void> _showVideoInfo(BuildContext context) async {
+    // Prepare extra metadata
+    String resolution = '-';
+    String sizeMB = '-';
+    String bitrateText = '-';
+    int? fileSizeBytes;
+    try {
+      final file = File(widget.video.path);
+      if (await file.exists()) {
+        fileSizeBytes = await file.length();
+      }
+    } catch (_) {}
+    // Resolution from video controller if available
+    if (_videoPlayerController != null && _videoPlayerController!.value.isInitialized) {
+      final sz = _videoPlayerController!.value.size;
+      if (sz != null && sz.width > 0 && sz.height > 0) {
+        resolution = '${sz.width.toInt()}x${sz.height.toInt()}';
+      }
+    }
+    // File size in MB
+    if (fileSizeBytes != null) {
+      final mb = fileSizeBytes! / (1024 * 1024);
+      sizeMB = mb.toStringAsFixed(2);
+    }
+    // Bitrate estimation (kbps)
+    if (fileSizeBytes != null && widget.video.duration > 0) {
+      final kbps = ((fileSizeBytes! * 8 * 1000) / widget.video.duration).round();
+      bitrateText = '${kbps} kbps';
+    }
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -520,6 +578,21 @@ class _PlayerScreenState extends State<PlayerScreen> {
               const SizedBox(height: 8),
               Text(
                 '时长: ${_formatDuration(widget.video.duration)}',
+                style: TextStyle(color: AppTheme.textColor),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '分辨率: ${resolution}',
+                style: TextStyle(color: AppTheme.textColor),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '大小: ${sizeMB} MB',
+                style: TextStyle(color: AppTheme.textColor),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '比特率: ${bitrateText}',
                 style: TextStyle(color: AppTheme.textColor),
               ),
               const SizedBox(height: 8),
@@ -605,6 +678,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
         _togglePlayPause();
       },
       toolbarWidget: _buildFullScreenToolbar(),
+      onCaptureTap: _captureCover,
       onPopInvoked: (didPop, result) {
         if (didPop) {
           _exitFullScreen();
@@ -641,6 +715,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
           _isDraggingProgress = false;
         });
       },
+      onCaptureTap: _captureCover,
       onSettingsTap: () {
         _showSettingsMenu(context, isFullScreen: true);
       },

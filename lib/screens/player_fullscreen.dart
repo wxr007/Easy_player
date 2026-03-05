@@ -17,6 +17,7 @@ class FullscreenPlayer extends StatelessWidget {
   final VoidCallback onDoubleTap;
   final Widget toolbarWidget;
   final Function(bool, dynamic) onPopInvoked;
+  final VoidCallback? onCaptureTap;
 
   const FullscreenPlayer({
     super.key,
@@ -27,6 +28,7 @@ class FullscreenPlayer extends StatelessWidget {
     required this.onDoubleTap,
     required this.toolbarWidget,
     required this.onPopInvoked,
+    this.onCaptureTap,
   });
 
   @override
@@ -59,6 +61,22 @@ class FullscreenPlayer extends StatelessWidget {
                       left: 0,
                       right: 0,
                       child: toolbarWidget,
+                    ),
+                  // Top-left capture button overlay (optional)
+                  if (onCaptureTap != null)
+                    Positioned(
+                      top: 12,
+                      left: 12,
+                      child: SizedBox(
+                        width: 40,
+                        height: 40,
+                        child: IconButton(
+                          padding: EdgeInsets.zero,
+                          icon: const Icon(Icons.camera_alt, color: Colors.white),
+                          onPressed: onCaptureTap,
+                          tooltip: '截取封面',
+                        ),
+                      ),
                     ),
                 ],
               )

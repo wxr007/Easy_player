@@ -172,6 +172,7 @@ class FullscreenToolbar extends StatelessWidget {
   final VoidCallback onSettingsTap;
   final VoidCallback onPlayPauseTap;
   final VoidCallback onExitFullscreenTap;
+  final VoidCallback? onCaptureTap;
   final String Function(int) formatDuration;
 
   const FullscreenToolbar({
@@ -186,6 +187,7 @@ class FullscreenToolbar extends StatelessWidget {
     required this.onSettingsTap,
     required this.onPlayPauseTap,
     required this.onExitFullscreenTap,
+    this.onCaptureTap,
     required this.formatDuration,
   });
 
@@ -252,6 +254,7 @@ class FullscreenToolbar extends StatelessWidget {
                     onPressed: onSettingsTap,
                   ),
                 ),
+                // Removed: moved capture button to top-left overlay in fullscreen
                 SizedBox(
                   width: 36,
                   height: 36,

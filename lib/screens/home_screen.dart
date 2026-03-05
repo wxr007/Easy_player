@@ -97,7 +97,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final uint8list = await VideoThumbnail.thumbnailData(
         video: videoPath,
         imageFormat: ImageFormat.JPEG,
-        maxWidth: 400,
+        maxWidth: 800,
         quality: 80,
         timeMs: timeMs,
       );
