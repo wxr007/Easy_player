@@ -604,7 +604,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return ListView.builder(
         controller: _subtitleScrollController,
         padding: const EdgeInsets.all(8),
-        cacheExtent: 2000, // Pre-render more items to ensure target is built
+        cacheExtent: 8000, // Pre-render more items to ensure target is built
         itemCount: _subtitles.length,
         itemBuilder: (context, index) {
           final subtitle = _subtitles[index];
