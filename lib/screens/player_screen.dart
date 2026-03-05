@@ -89,12 +89,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
   }
 
-  void _syncSubtitleToVideoPosition() {
+  void _syncSubtitleToVideoPosition({bool forceScroll = false}) {
     if (_subtitles.isEmpty || _videoPlayerController == null) return;
     
     final currentPosition = _videoPlayerController!.value.position.inMilliseconds;
     debugPrint('[DEBUG] _syncSubtitleToVideoPosition: currentPosition=$currentPosition, subtitles=${_subtitles.length}');
-    _updateCurrentSubtitle(currentPosition);
+    _updateCurrentSubtitle(currentPosition, forceScroll: forceScroll);
   }
 
   Future<void> _initializePlayer() async {
@@ -236,16 +236,18 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
   }
 
-  void _updateCurrentSubtitle(int positionMs) {
+  void _updateCurrentSubtitle(int positionMs, {bool forceScroll = false}) {
     if (_subtitles.isEmpty) return;
     
     // Binary search for faster subtitle lookup
     int newIndex = _searchSubtitle(positionMs);
     
-    debugPrint('[DEBUG] _updateCurrentSubtitle: positionMs=$positionMs, newIndex=$newIndex, total=${_subtitles.length}');
+    debugPrint('[DEBUG] _updateCurrentSubtitle: positionMs=$positionMs, newIndex=$newIndex, total=${_subtitles.length}, forceScroll=$forceScroll');
     
-    if (newIndex != _currentSubtitleIndex) {
-      debugPrint('[DEBUG] Subtitle changed from $_currentSubtitleIndex to $newIndex');
+    if (newIndex != _currentSubtitleIndex || forceScroll) {
+      if (newIndex != _currentSubtitleIndex) {
+        debugPrint('[DEBUG] Subtitle changed from $_currentSubtitleIndex to $newIndex');
+      }
       setState(() {
         _currentSubtitleIndex = newIndex;
       });
@@ -416,6 +418,135 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
   }
 
+  void _showSettingsMenu(BuildContext context, {bool isFullScreen = false}) {
+    if (isFullScreen) {
+      // _showFullScreenSettingsMenu(context);
+    } else {
+      _showNormalSettingsMenu(context);
+    }
+  }
+
+  void _showNormalSettingsMenu(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext context) {
+        return Container(
+          decoration: BoxDecoration(
+            color: AppTheme.cardColor,
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(16),
+              topRight: Radius.circular(16),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Text(
+                  '设置',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textColor,
+                  ),
+                ),
+              ),
+              ListTile(
+                leading: Icon(Icons.volume_up, color: AppTheme.textColor),
+                title: Text(
+                  '选择音轨',
+                  style: TextStyle(color: AppTheme.textColor),
+                ),
+                subtitle: Text(
+                  '该功能需要系统支持',
+                  style: TextStyle(
+                    color: AppTheme.textColor.withOpacity(0.6),
+                    fontSize: 12,
+                  ),
+                ),
+                enabled: false,
+                onTap: null,
+              ),
+              ListTile(
+                leading: Icon(Icons.closed_caption, color: AppTheme.textColor),
+                title: Text(
+                  '字幕设置',
+                  style: TextStyle(color: AppTheme.textColor),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  debugPrint('Subtitle settings opened');
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.info_outline, color: AppTheme.textColor),
+                title: Text(
+                  '视频信息',
+                  style: TextStyle(color: AppTheme.textColor),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showVideoInfo(context);
+                },
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showVideoInfo(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: AppTheme.cardColor,
+          title: Text(
+            '视频信息',
+            style: TextStyle(color: AppTheme.textColor),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '视频名称: ${widget.video.name}',
+                style: TextStyle(color: AppTheme.textColor),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '时长: ${_formatDuration(widget.video.duration)}',
+                style: TextStyle(color: AppTheme.textColor),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '宽高比: ${_videoAspectRatio.toStringAsFixed(2)}',
+                style: TextStyle(color: AppTheme.textColor),
+              ),
+              if (widget.video.subtitleName != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  '字幕: ${widget.video.subtitleName}',
+                  style: TextStyle(color: AppTheme.textColor),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('关闭', style: TextStyle(color: AppTheme.primaryColor)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _enterFullScreen() async {
     // Hide system UI
     // await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
@@ -453,6 +584,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
     // Update the UI state
     setState(() {
       _isFullScreen = false;
+    });
+    
+    // Resync subtitle position after exiting fullscreen
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _syncSubtitleToVideoPosition(forceScroll: true);
+      }
     });
   }
 
@@ -502,6 +640,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
         setState(() {
           _isDraggingProgress = false;
         });
+      },
+      onSettingsTap: () {
+        _showSettingsMenu(context, isFullScreen: true);
       },
       onPlayPauseTap: _togglePlayPause,
       onExitFullscreenTap: _exitFullScreen,
@@ -663,7 +804,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       isPlaying: _videoPlayerController?.value.isPlaying ?? false,
       hasSubtitle: widget.video.subtitlePath != null,
       onSettingsTap: () {
-        debugPrint('Settings button pressed');
+        _showSettingsMenu(context, isFullScreen: false);
       },
       onTargetModeTap: () {
         setState(() {

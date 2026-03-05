@@ -169,6 +169,7 @@ class FullscreenToolbar extends StatelessWidget {
   final Function(int)? onPositionChanged;
   final VoidCallback? onDragStart;
   final VoidCallback? onDragEnd;
+  final VoidCallback onSettingsTap;
   final VoidCallback onPlayPauseTap;
   final VoidCallback onExitFullscreenTap;
   final String Function(int) formatDuration;
@@ -182,6 +183,7 @@ class FullscreenToolbar extends StatelessWidget {
     this.onPositionChanged,
     this.onDragStart,
     this.onDragEnd,
+    required this.onSettingsTap,
     required this.onPlayPauseTap,
     required this.onExitFullscreenTap,
     required this.formatDuration,
@@ -190,36 +192,24 @@ class FullscreenToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Colors.black54,
-            Colors.transparent,
-            Colors.transparent,
-            Colors.black54,
-          ],
-          stops: const [0.0, 0.3, 0.7, 1.0],
-        ),
-      ),
+      color: Colors.transparent,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           // Progress bar with time
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             child: Row(
               children: [
                 Text(
                   formatDuration(position),
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                  style: const TextStyle(color: Colors.white, fontSize: 11),
                 ),
                 Expanded(
                   child: SliderTheme(
                     data: SliderTheme.of(context).copyWith(
                       trackHeight: 3,
-                      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
                       activeTrackColor: AppTheme.primaryColor,
                       inactiveTrackColor: Colors.white30,
                       thumbColor: AppTheme.primaryColor,
@@ -242,28 +232,47 @@ class FullscreenToolbar extends StatelessWidget {
                 ),
                 Text(
                   formatDuration(duration),
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                  style: const TextStyle(color: Colors.white, fontSize: 11),
                 ),
               ],
             ),
           ),
           // Control buttons
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                IconButton(
-                  icon: Icon(
-                    isPlaying ? Icons.pause : Icons.play_arrow,//Icons.pause_circle_filled : Icons.play_circle_filled,
-                    color: Colors.white,
+                SizedBox(
+                  width: 36,
+                  height: 36,
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    icon: const Icon(Icons.settings, color: Colors.white, size: 20),
+                    onPressed: onSettingsTap,
                   ),
-                  onPressed: onPlayPauseTap,
                 ),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.fullscreen_exit, color: Colors.white),
-                  onPressed: onExitFullscreenTap,
+                SizedBox(
+                  width: 36,
+                  height: 36,
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    icon: Icon(
+                      isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
+                      color: Colors.white,
+                      size: 32,
+                    ),
+                    onPressed: onPlayPauseTap,
+                  ),
+                ),
+                SizedBox(
+                  width: 36,
+                  height: 36,
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    icon: const Icon(Icons.fullscreen_exit, color: Colors.white, size: 20),
+                    onPressed: onExitFullscreenTap,
+                  ),
                 ),
               ],
             ),
