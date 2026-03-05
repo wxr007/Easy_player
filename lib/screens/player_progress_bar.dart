@@ -255,9 +255,8 @@ class FullscreenToolbar extends StatelessWidget {
               children: [
                 IconButton(
                   icon: Icon(
-                    isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
+                    isPlaying ? Icons.pause : Icons.play_arrow,//Icons.pause_circle_filled : Icons.play_circle_filled,
                     color: Colors.white,
-                    size: 40,
                   ),
                   onPressed: onPlayPauseTap,
                 ),
