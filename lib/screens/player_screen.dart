@@ -106,6 +106,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
   int _draggedPosition = 0;
   bool _showFullScreenControls = true; // Show controls in fullscreen by default
   Timer? _fullScreenControlsTimer; // Auto-hide controls timer
+  bool _subtitleEditMode = false; // whether subtitles editing mode is active
+  int? _editingSubtitleIndex; // index of currently editing subtitle (step 1 placeholder)
 
   @override
   void initState() {
@@ -578,12 +580,47 @@ class _PlayerScreenState extends State<PlayerScreen> {
               ListTile(
                 leading: Icon(Icons.closed_caption, color: AppTheme.textColor),
                 title: Text(
-                  '字幕设置',
+                  '字幕修改',
                   style: TextStyle(color: AppTheme.textColor),
                 ),
+                trailing: Switch(
+                  value: _subtitleEditMode,
+                  onChanged: (val) {
+                    setState(() {
+                      _subtitleEditMode = val;
+                    });
+                    Navigator.pop(context);
+                    if (_subtitleEditMode) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('字幕编辑模式已开启，点击字幕列表中的字幕项进行编辑'), duration: Duration(seconds: 3)),
+                      );
+                      if(_videoPlayerController?.value.isPlaying == true){
+                        _videoPlayerController!.pause();
+                      }
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('字幕编辑模式已关闭'), duration: Duration(seconds: 2)),
+                      );
+                    }
+                  },
+                ),
                 onTap: () {
+                  setState(() {
+                    _subtitleEditMode = !_subtitleEditMode;
+                  });
                   Navigator.pop(context);
-                  debugPrint('Subtitle settings opened');
+                  if (_subtitleEditMode) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('字幕编辑模式已开启，点击字幕列表中的字幕项进行编辑'), duration: Duration(seconds: 3)),
+                    );
+                    if(_videoPlayerController?.value.isPlaying == true){
+                      _videoPlayerController!.pause();
+                    }
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('字幕编辑模式已关闭'), duration: Duration(seconds: 2)),
+                    );
+                  }
                 },
               ),
               ListTile(
@@ -927,10 +964,26 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Widget _buildToolbar() {
+    // if (_subtitleEditMode) {
+    //   return Container(
+    //     height: 56,
+    //     color: AppTheme.cardColor,
+    //     alignment: Alignment.centerRight,
+    //     padding: const EdgeInsets.symmetric(horizontal: 12),
+    //     child: IconButton(
+    //       icon: Icon(Icons.edit, color: AppTheme.textColor),
+    //       onPressed: () {
+    //         setState(() { _subtitleEditMode = false; });
+    //       },
+    //       tooltip: '退出字幕修改',
+    //     ),
+    //   );
+    // }
     return PlayerToolbar(
       isTargetMode: _targetMode,
       isPlaying: _videoPlayerController?.value.isPlaying ?? false,
       hasSubtitle: widget.video.subtitlePath != null,
+      isEditingSubtitle:_subtitleEditMode,
       onSettingsTap: () {
         _showSettingsMenu(context, isFullScreen: false);
       },
@@ -938,14 +991,25 @@ class _PlayerScreenState extends State<PlayerScreen> {
         setState(() {
           _targetMode = !_targetMode;
         });
+        _targetModeEndPaused = false; // Reset target mode end paused state when toggling
         if (_targetMode) {
           if(_videoPlayerController?.value.isPlaying == true){
             _videoPlayerController!.pause();
           }
-        }
-        _targetModeEndPaused = false; // Reset target mode end paused state when toggling
-        _targetModeStartMs = -1; // Reset target mode start time when toggling
-        _targetModeEndMs = -1; // Reset target mode end time when toggling      
+          if(_currentSubtitleIndex >= 0 && _currentSubtitleIndex < _subtitles.length){
+            final currentSubtitle = _subtitles[_currentSubtitleIndex];
+            _targetModeStartMs = currentSubtitle.startMs; // Set target mode start time to the start of the current subtitle
+            _targetModeEndMs = currentSubtitle.endMs; // Set target mode end time to the end of the current subtitle
+            debugPrint('[DEBUG] Target mode enabled: start=${_targetModeStartMs}, end=${_targetModeEndMs}');
+          } else {
+            _targetModeStartMs = -1; // No valid subtitle, set to -1
+            _targetModeEndMs = -1;
+            debugPrint('[DEBUG] Target mode enabled but no valid subtitle at current position');
+          }
+        }else{          
+          _targetModeStartMs = -1; // Reset target mode start time when toggling
+          _targetModeEndMs = -1; // Reset target mode end time when toggling   
+        }   
       },
       onPlayPauseTap: _togglePlayPause,
       onSubtitleTap: _pickSubtitle,
@@ -955,6 +1019,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
         } else {
           _enterFullScreen();
         }
+      },
+      onSubtitleEditTap: () {
+
       },
     );
   }

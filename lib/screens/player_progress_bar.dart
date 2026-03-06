@@ -93,22 +93,26 @@ class PlayerToolbar extends StatelessWidget {
   final bool isTargetMode;
   final bool isPlaying;
   final bool hasSubtitle;
+  final bool isEditingSubtitle;
   final VoidCallback onSettingsTap;
   final VoidCallback onTargetModeTap;
   final VoidCallback onPlayPauseTap;
   final VoidCallback onSubtitleTap;
   final VoidCallback onFullscreenTap;
+  final VoidCallback onSubtitleEditTap;
 
   const PlayerToolbar({
     super.key,
     required this.isTargetMode,
     required this.isPlaying,
     required this.hasSubtitle,
+    required this.isEditingSubtitle,
     required this.onSettingsTap,
     required this.onTargetModeTap,
     required this.onPlayPauseTap,
     required this.onSubtitleTap,
     required this.onFullscreenTap,
+    required this.onSubtitleEditTap,
   });
 
   @override
@@ -150,10 +154,15 @@ class PlayerToolbar extends StatelessWidget {
               onPressed: onSubtitleTap,
             ),
             const Spacer(),
-            IconButton(
-              icon: Icon(Icons.fullscreen, color: AppTheme.textColor),
-              onPressed: onFullscreenTap,
-            ),
+            isEditingSubtitle
+              ? IconButton(
+                  icon: const Icon(Icons.edit, color: AppTheme.textColor),
+                  onPressed: onSubtitleEditTap,
+                )
+              : IconButton(
+                  icon: Icon(Icons.fullscreen, color: AppTheme.textColor),
+                  onPressed: onFullscreenTap,
+                ),
           ],
         ),
       ),
