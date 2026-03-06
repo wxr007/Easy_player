@@ -18,6 +18,7 @@ import 'player_fullscreen.dart';
 import 'player_subtitle_list.dart';
 import 'player_progress_bar.dart';
 import 'video_info_chip.dart';
+import 'player_subtitle_edit.dart';
 
 class KeepScreenOn {
   static const MethodChannel _channel = MethodChannel('easy_player/keep_screen_on');
@@ -987,7 +988,23 @@ class _PlayerScreenState extends State<PlayerScreen> {
         }
       },
       onSubtitleEditTap: () {
-
+        if (_currentSubtitleIndex >= 0 && _currentSubtitleIndex < _subtitles.length) {
+          final currentSubtitle = _subtitles[_currentSubtitleIndex];
+          showDialog<SubtitleItem>(
+            context: context,
+            builder: (context) => SubtitleEditDialog(subtitle: currentSubtitle),
+          ).then((editedSubtitle) {
+            if (editedSubtitle != null) {
+              setState(() {
+                _subtitles[_currentSubtitleIndex] = editedSubtitle;
+              });
+            }
+          });
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('当前没有可编辑的字幕')),
+          );
+        }
       },
     );
   }
