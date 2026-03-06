@@ -18,6 +18,26 @@ import 'player_fullscreen.dart';
 import 'player_subtitle_list.dart';
 import 'player_progress_bar.dart';
 
+class KeepScreenOn {
+  static const MethodChannel _channel = MethodChannel('easy_player/keep_screen_on');
+  
+  static Future<void> enable() async {
+    try {
+      await _channel.invokeMethod('enable');
+    } on PlatformException catch (e) {
+      debugPrint('Failed to enable keep screen on: ${e.message}');
+    }
+  }
+  
+  static Future<void> disable() async {
+    try {
+      await _channel.invokeMethod('disable');
+    } on PlatformException catch (e) {
+      debugPrint('Failed to disable keep screen on: ${e.message}');
+    }
+  }
+}
+
 class PlayerScreen extends StatefulWidget {
   final VideoItem video;
 
@@ -76,6 +96,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
   final List<GlobalKey> _subtitleKeys = [];
   int _currentPosition = 0;
   bool _targetMode = false;
+  bool _targetModeEndPaused = false;
+  int _targetModeStartMs = -1;
+  int _targetModeEndMs = -1;
   double _averageItemHeight = 90.0; // Will be updated after first calculation
   bool _isFullScreen = false;
   double _videoAspectRatio = 16.0 / 9.0; // Default aspect ratio
@@ -252,6 +275,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
       setState(() {
         _isLoading = false;
       });
+      
+      // Enable keep screen on when video starts playing
+      KeepScreenOn.enable();
     } catch (e) {
       _retryCount++;
       if (_retryCount < _maxRetries) {
@@ -287,16 +313,21 @@ class _PlayerScreenState extends State<PlayerScreen> {
       if (_videoPlayerController!.value.isPlaying) {
         context.read<VideoStore>().updateVideoPosition(widget.video.id, position);
         
-        if (_targetMode && _currentSubtitleIndex >= 0 && _currentSubtitleIndex < _subtitles.length) {
-          if(position >= _subtitles[_currentSubtitleIndex].endMs){
+        if (_targetMode && _targetModeEndMs >= 0) {
+          if(position >= _targetModeEndMs){
             debugPrint('[DEBUG] Target mode: reached end of subtitle at $position, pausing');
-            _videoPlayerController!.pause();
+            _targetModeEndPaused = true;
+            _videoPlayerController!.pause();            
           }          
         }
       }
       setState(() {
         _currentPosition = position;
       });
+      if(_targetMode && _targetModeEndPaused) {
+        debugPrint('[DEBUG] Target mode end paused, skipping subtitle sync until user resumes');
+        return;
+      }
       _updateCurrentSubtitle(position);
     }
   }
@@ -417,6 +448,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
         _videoPlayerController!.dispose();
         _videoPlayerController = null;
       }
+      // Ensure wakelock is released when disposing
+      KeepScreenOn.disable();
       if (_chewieController != null) {
         _chewieController!.dispose();
         _chewieController = null;
@@ -453,12 +486,20 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
   }
 
-  void _togglePlayPause() {
+  void _togglePlayPause() async {
     if (_videoPlayerController != null) {
       if (_videoPlayerController!.value.isPlaying) {
         _videoPlayerController!.pause();
+        // Turn off wakelock when paused
+        KeepScreenOn.disable();
       } else {
+        if (_targetMode && _targetModeEndPaused) {
+          await _videoPlayerController!.seekTo(Duration(milliseconds: _targetModeStartMs));
+          _targetModeEndPaused = false;
+        }
         _videoPlayerController!.play();
+        // Enable wakelock when playing
+        KeepScreenOn.enable();
       }
     }
   }
@@ -653,6 +694,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _showFullScreenControls = false; // Hide controls when entering fullscreen
       _fullScreenControlsTimer?.cancel(); // Cancel any existing timer
     });
+    // Keep the screen awake while in fullscreen
+    KeepScreenOn.enable();
   }
 
   Future<void> _exitFullScreen() async {
@@ -666,6 +709,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
     setState(() {
       _isFullScreen = false;
     });
+    // Release wake lock when exiting fullscreen
+    KeepScreenOn.disable();
     
     // Resync subtitle position after exiting fullscreen
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -893,9 +938,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
         setState(() {
           _targetMode = !_targetMode;
         });
-        if (_targetMode && _videoPlayerController?.value.isPlaying == true) {
-          _videoPlayerController!.pause();
+        if (_targetMode) {
+          if(_videoPlayerController?.value.isPlaying == true){
+            _videoPlayerController!.pause();
+          }
         }
+        _targetModeEndPaused = false; // Reset target mode end paused state when toggling
+        _targetModeStartMs = -1; // Reset target mode start time when toggling
+        _targetModeEndMs = -1; // Reset target mode end time when toggling      
       },
       onPlayPauseTap: _togglePlayPause,
       onSubtitleTap: _pickSubtitle,
@@ -952,6 +1002,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
           if (_videoPlayerController != null) {
             await _videoPlayerController!.seekTo(Duration(milliseconds: subtitle.startMs));
             if (_targetMode) {
+              _targetModeStartMs = subtitle.startMs; // Set target mode start time to the start of the selected subtitle
+              _targetModeEndMs = subtitle.endMs; // Set target mode end time to the end of the selected subtitle
+              _targetModeEndPaused = false; // Reset target mode end paused state when seeking to a subtitle
               _videoPlayerController!.play();
             }
           }
