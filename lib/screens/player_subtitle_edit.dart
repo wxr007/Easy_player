@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:video_player/video_player.dart';
 import '../models/subtitle_item.dart';
 import '../theme/app_theme.dart';
 
 class SubtitleEditDialog extends StatefulWidget {
   final SubtitleItem subtitle;
+  final VideoPlayerController? videoController;
 
-  const SubtitleEditDialog({super.key, required this.subtitle});
+  const SubtitleEditDialog({super.key, required this.subtitle, this.videoController});
 
   @override
   State<SubtitleEditDialog> createState() => _SubtitleEditDialogState();
@@ -16,6 +18,7 @@ class _SubtitleEditDialogState extends State<SubtitleEditDialog> {
   late TextEditingController _textController;
   late TextEditingController _startController;
   late TextEditingController _endController;
+  bool _isPlaying = false;
 
   @override
   void initState() {
@@ -23,14 +26,50 @@ class _SubtitleEditDialogState extends State<SubtitleEditDialog> {
     _textController = TextEditingController(text: widget.subtitle.text);
     _startController = TextEditingController(text: _formatMs(widget.subtitle.startMs));
     _endController = TextEditingController(text: _formatMs(widget.subtitle.endMs));
+    widget.videoController?.addListener(_onVideoStateChanged);
   }
 
   @override
   void dispose() {
+    widget.videoController?.removeListener(_onVideoStateChanged);
+    widget.videoController?.pause();
     _textController.dispose();
     _startController.dispose();
     _endController.dispose();
     super.dispose();
+  }
+
+  void _onVideoStateChanged() {
+    if (mounted) {
+      setState(() {
+        _isPlaying = widget.videoController?.value.isPlaying ?? false;
+      });
+    }
+  }
+
+  Future<void> _playPreview() async {
+    final controller = widget.videoController;
+    if (controller == null) return;
+
+    final startMs = _parseTime(_startController.text) ?? widget.subtitle.startMs;
+    final endMs = _parseTime(_endController.text) ?? widget.subtitle.endMs;
+
+    await controller.seekTo(Duration(milliseconds: startMs));
+    await controller.play();
+
+    controller.removeListener(_onVideoStateChanged);
+    controller.addListener(() {
+      if (mounted) {
+        final position = controller.value.position.inMilliseconds;
+        if (position >= endMs) {
+          controller.pause();
+          controller.removeListener(_onVideoStateChanged);
+          setState(() => _isPlaying = false);
+        } else {
+          setState(() => _isPlaying = controller.value.isPlaying);
+        }
+      }
+    });
   }
 
   String _formatMs(int ms) {
@@ -90,7 +129,7 @@ class _SubtitleEditDialogState extends State<SubtitleEditDialog> {
       backgroundColor: AppTheme.cardColor,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
-        width: MediaQuery.of(context).size.width * 0.9,
+        width: MediaQuery.of(context).size.width,
         padding: const EdgeInsets.all(20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -145,13 +184,14 @@ class _SubtitleEditDialogState extends State<SubtitleEditDialog> {
                       const SizedBox(height: 8),
                       TextField(
                         controller: _startController,
-                        style: TextStyle(color: AppTheme.textColor),
+                        style: TextStyle(color: AppTheme.textColor, fontSize: 13),
                         inputFormatters: [
                           FilteringTextInputFormatter.allow(RegExp(r'[\d:.]')),
                         ],
                         decoration: InputDecoration(
                           hintText: '00:00:00.000',
-                          hintStyle: TextStyle(color: AppTheme.textColor.withOpacity(0.5)),
+                          hintStyle: TextStyle(color: AppTheme.textColor.withOpacity(0.5), fontSize: 13),
+                          isDense: true,
                           filled: true,
                           fillColor: AppTheme.backgroundColor,
                           border: OutlineInputBorder(
@@ -203,13 +243,14 @@ class _SubtitleEditDialogState extends State<SubtitleEditDialog> {
                       const SizedBox(height: 8),
                       TextField(
                         controller: _endController,
-                        style: TextStyle(color: AppTheme.textColor),
+                        style: TextStyle(color: AppTheme.textColor, fontSize: 13),
                         inputFormatters: [
                           FilteringTextInputFormatter.allow(RegExp(r'[\d:.]')),
                         ],
                         decoration: InputDecoration(
                           hintText: '00:00:00.000',
-                          hintStyle: TextStyle(color: AppTheme.textColor.withOpacity(0.5)),
+                          hintStyle: TextStyle(color: AppTheme.textColor.withOpacity(0.5), fontSize: 13),
+                          isDense: true,
                           filled: true,
                           fillColor: AppTheme.backgroundColor,
                           border: OutlineInputBorder(
