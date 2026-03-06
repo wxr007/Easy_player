@@ -17,6 +17,7 @@ import 'player_subtitle_search.dart';
 import 'player_fullscreen.dart';
 import 'player_subtitle_list.dart';
 import 'player_progress_bar.dart';
+import 'video_info_chip.dart';
 
 class KeepScreenOn {
   static const MethodChannel _channel = MethodChannel('easy_player/keep_screen_on');
@@ -47,40 +48,6 @@ class PlayerScreen extends StatefulWidget {
   State<PlayerScreen> createState() => _PlayerScreenState();
 }
 
-// Lightweight chip widget used in the Video Info dialog for a clean, grid-like layout
-class _VideoInfoChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-
-  const _VideoInfoChip({required this.icon, required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      color: AppTheme.cardColor,
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 18, color: AppTheme.textColor),
-            const SizedBox(width: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: TextStyle(fontSize: 12, color: AppTheme.textColor.withOpacity(0.9))),
-                Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppTheme.textColor)),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 class _PlayerScreenState extends State<PlayerScreen> {
   VideoPlayerController? _videoPlayerController;
@@ -107,7 +74,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
   bool _showFullScreenControls = true; // Show controls in fullscreen by default
   Timer? _fullScreenControlsTimer; // Auto-hide controls timer
   bool _subtitleEditMode = false; // whether subtitles editing mode is active
-  int? _editingSubtitleIndex; // index of currently editing subtitle (step 1 placeholder)
 
   @override
   void initState() {
@@ -488,7 +454,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
   }
 
-  void _togglePlayPause() async {
+  Future<void> _togglePlayPause() async {
     if (_videoPlayerController != null) {
       if (_videoPlayerController!.value.isPlaying) {
         _videoPlayerController!.pause();
@@ -685,13 +651,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
               spacing: 12,
               runSpacing: 12,
               children: [
-                _VideoInfoChip(icon: Icons.access_time, label: '时长', value: _formatDuration(widget.video.duration)),
-                _VideoInfoChip(icon: Icons.aspect_ratio, label: '分辨率', value: resolution),
-                _VideoInfoChip(icon: Icons.sd_card, label: '大小', value: '$sizeMB MB'),
-                _VideoInfoChip(icon: Icons.speed, label: '比特率', value: bitrateText),
-                _VideoInfoChip(icon: Icons.dashboard, label: '宽高比', value: '${_videoAspectRatio.toStringAsFixed(2)}'),
+                VideoInfoChip(icon: Icons.access_time, label: '时长', value: _formatDuration(widget.video.duration)),
+                VideoInfoChip(icon: Icons.aspect_ratio, label: '分辨率', value: resolution),
+                VideoInfoChip(icon: Icons.sd_card, label: '大小', value: '$sizeMB MB'),
+                VideoInfoChip(icon: Icons.speed, label: '比特率', value: bitrateText),
+                VideoInfoChip(icon: Icons.dashboard, label: '宽高比', value: '${_videoAspectRatio.toStringAsFixed(2)}'),
                 if (widget.video.subtitleName != null)
-                  _VideoInfoChip(icon: Icons.subtitles, label: '字幕', value: widget.video.subtitleName!),
+                  VideoInfoChip(icon: Icons.subtitles, label: '字幕', value: widget.video.subtitleName!),
               ],
             ),
           ),
