@@ -126,47 +126,81 @@ class _SubtitleEditBottomSheetState extends State<SubtitleEditBottomSheet> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(10),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+            // 标题栏和按钮
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Icon(Icons.subtitles, color: AppTheme.primaryColor),
-                const SizedBox(width: 8),
-                Text(
-                  '编辑字幕',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textColor,
-                  ),
+                Row(
+                  children: [
+                    const Icon(Icons.subtitles, color: AppTheme.primaryColor),
+                    const SizedBox(width: 8),
+                    Text(
+                      '编辑字幕',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.textColor,
+                      ),
+                    ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: Text(
+                        '取消',
+                        style: TextStyle(color: AppTheme.textColor.withOpacity(0.7)),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: _save,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.primaryColor,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                      ),
+                      child: const Text('保存'),
+                    ),
+                  ],
                 ),
               ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 6),
+            // 字幕内容
             Text(
               '字幕内容',
               style: TextStyle(fontSize: 14, color: AppTheme.textColor.withOpacity(0.8)),
             ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _textController,
-              maxLines: 3,
-              style: TextStyle(color: AppTheme.textColor),
-              decoration: InputDecoration(
-                hintText: '请输入字幕内容',
-                hintStyle: TextStyle(color: AppTheme.textColor.withOpacity(0.5)),
-                filled: true,
-                fillColor: AppTheme.backgroundColor,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide.none,
+            const SizedBox(height: 6),
+            Container(
+              height: 80, // 固定高度为两行
+              child: TextField(
+                controller: _textController,
+                maxLines: null, // 允许多行
+                style: TextStyle(color: AppTheme.textColor),
+                decoration: InputDecoration(
+                  hintText: '请输入字幕内容',
+                  hintStyle: TextStyle(fontSize: 13, color: AppTheme.textColor.withOpacity(0.5)),
+                  filled: true,
+                  fillColor: AppTheme.backgroundColor,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide.none,
+                  ),
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            // 时间设置
             Row(
               children: [
                 Expanded(
@@ -177,7 +211,7 @@ class _SubtitleEditBottomSheetState extends State<SubtitleEditBottomSheet> {
                         '开始时间',
                         style: TextStyle(fontSize: 14, color: AppTheme.textColor.withOpacity(0.8)),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       TextField(
                         controller: _startController,
                         style: TextStyle(color: AppTheme.textColor, fontSize: 13),
@@ -196,7 +230,7 @@ class _SubtitleEditBottomSheetState extends State<SubtitleEditBottomSheet> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       Row(
                         children: [
                           Expanded(
@@ -210,7 +244,7 @@ class _SubtitleEditBottomSheetState extends State<SubtitleEditBottomSheet> {
                               child: const Text('-50ms', style: TextStyle(fontSize: 12)),
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 6),
                           Expanded(
                             child: OutlinedButton(
                               onPressed: () => _adjustTime(_startController, 50),
@@ -227,7 +261,7 @@ class _SubtitleEditBottomSheetState extends State<SubtitleEditBottomSheet> {
                     ],
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 6),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -236,7 +270,7 @@ class _SubtitleEditBottomSheetState extends State<SubtitleEditBottomSheet> {
                         '结束时间',
                         style: TextStyle(fontSize: 14, color: AppTheme.textColor.withOpacity(0.8)),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       TextField(
                         controller: _endController,
                         style: TextStyle(color: AppTheme.textColor, fontSize: 13),
@@ -255,7 +289,7 @@ class _SubtitleEditBottomSheetState extends State<SubtitleEditBottomSheet> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       Row(
                         children: [
                           Expanded(
@@ -269,7 +303,7 @@ class _SubtitleEditBottomSheetState extends State<SubtitleEditBottomSheet> {
                               child: const Text('-50ms', style: TextStyle(fontSize: 12)),
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 6),
                           Expanded(
                             child: OutlinedButton(
                               onPressed: () => _adjustTime(_endController, 50),
@@ -288,7 +322,8 @@ class _SubtitleEditBottomSheetState extends State<SubtitleEditBottomSheet> {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 6),
+            // 预览按钮
             if (widget.videoController != null)
               SizedBox(
                 width: double.infinity,
@@ -299,38 +334,13 @@ class _SubtitleEditBottomSheetState extends State<SubtitleEditBottomSheet> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.primaryColor,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
                 ),
               ),
-            if (widget.videoController != null) const SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: Text(
-                    '取消',
-                    style: TextStyle(color: AppTheme.textColor.withOpacity(0.7)),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                ElevatedButton(
-                  onPressed: _save,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primaryColor,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: const Text('保存'),
-                ),
-              ],
-            ),
           ],
         ),
     );

@@ -501,8 +501,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   void _showNormalSettingsMenu(BuildContext context) {
+    // 确保使用根上下文来显示全屏弹窗
+    final rootContext = Navigator.of(context).context;
     showModalBottomSheet(
-      context: context,
+      context: rootContext,
       backgroundColor: Colors.transparent,
       builder: (BuildContext context) {
         return Container(
@@ -1049,8 +1051,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
       onSubtitleEditTap: () {
         if (_currentSubtitleIndex >= 0 && _currentSubtitleIndex < _subtitles.length) {
           final currentSubtitle = _subtitles[_currentSubtitleIndex];
+          // 确保使用根上下文来显示全屏弹窗
+          final rootContext = Navigator.of(context).context;
           showModalBottomSheet<SubtitleItem>(
-            context: context,
+            context: rootContext,
             isScrollControlled: true,
             backgroundColor: AppTheme.cardColor,
             shape: RoundedRectangleBorder(
