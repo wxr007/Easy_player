@@ -704,11 +704,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Future<void> _exitFullScreen() async {
-    // Always restore to portrait when exiting
-    await SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-    ]);
+    // Allow all orientations to maintain current screen direction
+    await SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     
     // Update the UI state
     setState(() {
