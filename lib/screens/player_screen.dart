@@ -857,6 +857,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return _buildFullScreenPlayer();
     }
     
+    final size = MediaQuery.of(context).size;
+    final isLandscape = size.width > size.height;
+
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
       appBar: AppBar(
@@ -880,59 +883,128 @@ class _PlayerScreenState extends State<PlayerScreen> {
         ),
         toolbarHeight: 60,
       ),
-      body: Column(
-        children: [
-          SizedBox(
-            height: 250,
-            child: _isLoading
-                ? Center(child: CircularProgressIndicator(color: AppTheme.primaryColor))
-                : _errorMessage != null
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.error, color: Colors.red, size: 40),
-                            const SizedBox(height: 10),
-                            Text(_errorMessage!, style: TextStyle(color: AppTheme.textColor), textAlign: TextAlign.center),
-                            const SizedBox(height: 10),
-                            ElevatedButton(
-                              onPressed: () => Navigator.pop(context),
-                              child: const Text('返回'),
-                            ),
-                          ],
-                        ),
-                      )
-                    : _chewieController != null
-                        ? Container(
-                            color: Colors.black,
-                            child: Center(
-                              child: AspectRatio(
-                                aspectRatio: 16 / 9,
-                                child: GestureDetector(
-                                  behavior: HitTestBehavior.opaque,
-                                  onTap: () {
-                                    debugPrint('onTap triggered');
-                                  },
-                                  onDoubleTap: () {
-                                    debugPrint('onDoubleTap triggered');
-                                    _togglePlayPause();
-                                  },
-                                  child: Chewie(
-                                    controller: _chewieController!,
+      body: isLandscape
+          ? Row(
+              children: [
+                // 左侧：播放器
+                Expanded(
+                  flex: 2,
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: _isLoading
+                            ? Center(child: CircularProgressIndicator(color: AppTheme.primaryColor))
+                            : _errorMessage != null
+                                ? Center(
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        const Icon(Icons.error, color: Colors.red, size: 40),
+                                        const SizedBox(height: 10),
+                                        Text(_errorMessage!, style: TextStyle(color: AppTheme.textColor), textAlign: TextAlign.center),
+                                        const SizedBox(height: 10),
+                                        ElevatedButton(
+                                          onPressed: () => Navigator.pop(context),
+                                          child: const Text('返回'),
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                : _chewieController != null
+                                    ? Container(
+                                        color: Colors.black,
+                                        child: Center(
+                                          child: AspectRatio(
+                                            aspectRatio: 16 / 9,
+                                            child: GestureDetector(
+                                              behavior: HitTestBehavior.opaque,
+                                              onTap: () {
+                                                debugPrint('onTap triggered');
+                                              },
+                                              onDoubleTap: () {
+                                                debugPrint('onDoubleTap triggered');
+                                                _togglePlayPause();
+                                              },
+                                              child: Chewie(
+                                                controller: _chewieController!,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      )
+                                    : Center(child: Text('无法加载播放器', style: TextStyle(color: AppTheme.textColor))),
+                      ),
+                      _buildProgressBar(),
+                    ],
+                  ),
+                ),
+                // 右侧：字幕列表和工具栏
+                Expanded(
+                  flex: 1,
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: _buildSubtitleSection(),
+                      ),
+                      _buildToolbar(),
+                    ],
+                  ),
+                ),
+              ],
+            )
+          : Column(
+              children: [
+                SizedBox(
+                  height: 250,
+                  child: _isLoading
+                      ? Center(child: CircularProgressIndicator(color: AppTheme.primaryColor))
+                      : _errorMessage != null
+                          ? Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.error, color: Colors.red, size: 40),
+                                  const SizedBox(height: 10),
+                                  Text(_errorMessage!, style: TextStyle(color: AppTheme.textColor), textAlign: TextAlign.center),
+                                  const SizedBox(height: 10),
+                                  ElevatedButton(
+                                    onPressed: () => Navigator.pop(context),
+                                    child: const Text('返回'),
                                   ),
-                                ),
+                                ],
                               ),
-                            ),
-                          )
-                        : Center(child: Text('无法加载播放器', style: TextStyle(color: AppTheme.textColor))),
-          ),
-          _buildProgressBar(),
-          Expanded(
-            child: _buildSubtitleSection(),
-          ),
-          _buildToolbar(),
-        ],
-      ),
+                            )
+                          : _chewieController != null
+                              ? Container(
+                                  color: Colors.black,
+                                  child: Center(
+                                    child: AspectRatio(
+                                      aspectRatio: 16 / 9,
+                                      child: GestureDetector(
+                                        behavior: HitTestBehavior.opaque,
+                                        onTap: () {
+                                          debugPrint('onTap triggered');
+                                        },
+                                        onDoubleTap: () {
+                                          debugPrint('onDoubleTap triggered');
+                                          _togglePlayPause();
+                                        },
+                                        child: Chewie(
+                                          controller: _chewieController!,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              : Center(child: Text('无法加载播放器', style: TextStyle(color: AppTheme.textColor))),
+                ),
+                _buildProgressBar(),
+                Expanded(
+                  child: _buildSubtitleSection(),
+                ),
+                _buildToolbar(),
+              ],
+            ),
     );
   }
 
