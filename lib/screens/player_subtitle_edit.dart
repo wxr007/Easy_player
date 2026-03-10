@@ -4,17 +4,17 @@ import 'package:video_player/video_player.dart';
 import '../models/subtitle_item.dart';
 import '../theme/app_theme.dart';
 
-class SubtitleEditDialog extends StatefulWidget {
+class SubtitleEditBottomSheet extends StatefulWidget {
   final SubtitleItem subtitle;
   final VideoPlayerController? videoController;
 
-  const SubtitleEditDialog({super.key, required this.subtitle, this.videoController});
+  const SubtitleEditBottomSheet({super.key, required this.subtitle, this.videoController});
 
   @override
-  State<SubtitleEditDialog> createState() => _SubtitleEditDialogState();
+  State<SubtitleEditBottomSheet> createState() => _SubtitleEditBottomSheetState();
 }
 
-class _SubtitleEditDialogState extends State<SubtitleEditDialog> {
+class _SubtitleEditBottomSheetState extends State<SubtitleEditBottomSheet> {
   late TextEditingController _textController;
   late TextEditingController _startController;
   late TextEditingController _endController;
@@ -125,16 +125,12 @@ class _SubtitleEditDialogState extends State<SubtitleEditDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: AppTheme.cardColor,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Container(
-        width: MediaQuery.of(context).size.width,
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+    return Container(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
             Row(
               children: [
                 const Icon(Icons.subtitles, color: AppTheme.primaryColor),
@@ -292,7 +288,25 @@ class _SubtitleEditDialogState extends State<SubtitleEditDialog> {
                 ),
               ],
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
+            if (widget.videoController != null)
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _isPlaying ? null : _playPreview,
+                  icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
+                  label: Text(_isPlaying ? '预览中...' : '预览播放'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryColor,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ),
+            if (widget.videoController != null) const SizedBox(height: 24),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
@@ -319,7 +333,6 @@ class _SubtitleEditDialogState extends State<SubtitleEditDialog> {
             ),
           ],
         ),
-      ),
     );
   }
 }

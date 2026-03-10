@@ -8,6 +8,7 @@ import 'package:chewie/chewie.dart';
 import 'dart:convert';
 import 'package:video_thumbnail/video_thumbnail.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:path_provider/path_provider.dart';
 import '../theme/app_theme.dart';
 import '../models/video_item.dart';
 import '../models/subtitle_item.dart';
@@ -786,6 +787,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
     return formatDuration(milliseconds);
   }
 
+  String _formatMs(int milliseconds) {
+    return formatMs(milliseconds);
+  }
+
+
   Future<void> _pickSubtitle() async {
     try {
       final result = await FilePicker.platform.pickFiles(
@@ -990,9 +996,17 @@ class _PlayerScreenState extends State<PlayerScreen> {
       onSubtitleEditTap: () {
         if (_currentSubtitleIndex >= 0 && _currentSubtitleIndex < _subtitles.length) {
           final currentSubtitle = _subtitles[_currentSubtitleIndex];
-          showDialog<SubtitleItem>(
+          showModalBottomSheet<SubtitleItem>(
             context: context,
-            builder: (context) => SubtitleEditDialog(subtitle: currentSubtitle),
+            isScrollControlled: true,
+            backgroundColor: AppTheme.cardColor,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+            ),
+            builder: (context) => SubtitleEditBottomSheet(
+              subtitle: currentSubtitle,
+              videoController: _videoPlayerController,
+            ),
           ).then((editedSubtitle) {
             if (editedSubtitle != null) {
               setState(() {
@@ -1006,7 +1020,100 @@ class _PlayerScreenState extends State<PlayerScreen> {
           );
         }
       },
+      onExportSubtitleTap: _exportSubtitles,
     );
+  }
+
+  Future<void> _exportSubtitles() async {
+    if (_subtitles.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('没有可导出的字幕')),
+      );
+      return;
+    }
+
+    try {
+      final String subtitleContent = exportSubtitles(_subtitles);
+      
+      // 获取默认保存目录
+      Directory? defaultDir;
+      try {
+        defaultDir = await getDownloadsDirectory();
+      } catch (e) {
+        defaultDir = await getApplicationDocumentsDirectory();
+      }
+      
+      String defaultFileName = '${widget.video.name}.srt';
+      
+      // 使用 getDirectoryPath 选择保存目录
+      String? selectedDirectory = await FilePicker.platform.getDirectoryPath(
+        dialogTitle: '选择字幕保存目录',
+        initialDirectory: defaultDir?.path,
+      );
+
+      if (selectedDirectory != null) {
+        // 显示文件名输入对话框
+        final TextEditingController fileNameController = TextEditingController(text: defaultFileName);
+        final String? fileName = await showDialog<String>(
+          context: context,
+          builder: (context) => AlertDialog(
+            backgroundColor: AppTheme.cardColor,
+            title: Text('输入文件名', style: TextStyle(color: AppTheme.textColor)),
+            content: TextField(
+              controller: fileNameController,
+              style: TextStyle(color: AppTheme.textColor),
+              decoration: InputDecoration(
+                hintText: '文件名.srt',
+                hintStyle: TextStyle(color: AppTheme.textColor.withOpacity(0.5)),
+                filled: true,
+                fillColor: AppTheme.backgroundColor,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text('取消', style: TextStyle(color: AppTheme.textColor.withOpacity(0.7))),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(fileNameController.text),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryColor,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('保存'),
+              ),
+            ],
+          ),
+        );
+
+        if (fileName != null && fileName.isNotEmpty) {
+          String finalFileName = fileName;
+          if (!finalFileName.toLowerCase().endsWith('.srt')) {
+            finalFileName = '$finalFileName.srt';
+          }
+          
+          final outputPath = '$selectedDirectory${Platform.pathSeparator}$finalFileName';
+          final file = File(outputPath);
+          await file.writeAsString(subtitleContent, encoding: utf8);
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('字幕已导出到: $outputPath')),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('导出失败: $e')),
+        );
+      }
+    }
   }
 
   Widget _buildProgressBar() {
@@ -1063,7 +1170,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
           _togglePlayPause();
         },
         onAddSubtitleTap: _pickSubtitle,
-        formatDuration: _formatDuration,
+        formatDuration: _formatMs,
       );
     } else {
       return Center(

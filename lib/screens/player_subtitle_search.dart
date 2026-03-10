@@ -12,7 +12,7 @@ class SubtitleSearch {
       int mid = (left + right) ~/ 2;
       final subtitle = subtitles[mid];
 
-      if (positionMs > subtitle.startMs && positionMs <= subtitle.endMs) {
+      if (positionMs > subtitle.startMs && positionMs < subtitle.endMs) {
         return mid; // Found exact match
       } else if (positionMs < subtitle.startMs) {
         right = mid - 1;
@@ -32,7 +32,7 @@ class SubtitleSearch {
     for (int i = 0; i < subtitles.length; i++) {
       final subtitle = subtitles[i];
 
-      if (positionMs > subtitle.startMs && positionMs <= subtitle.endMs) {
+      if (positionMs > subtitle.startMs && positionMs < subtitle.endMs) {
         return i; // Found exact match
       }
 

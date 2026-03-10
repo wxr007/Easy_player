@@ -80,3 +80,39 @@ String formatDuration(int milliseconds) {
   }
   return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
 }
+
+String formatMs(int ms) {
+  final duration = Duration(milliseconds: ms);
+  final hours = duration.inHours;
+  final minutes = (duration.inMinutes % 60).toString().padLeft(2, '0');
+  final seconds = (duration.inSeconds % 60).toString().padLeft(2, '0');
+  final milliseconds = (ms % 1000).toString().padLeft(3, '0');
+  if (hours > 0) {
+    return '${hours.toString().padLeft(2, '0')}:$minutes:$seconds.$milliseconds';
+  } else {
+    return '$minutes:$seconds.$milliseconds';
+  }
+}
+
+String exportSubtitles(List<SubtitleItem> subtitles) {
+  final buffer = StringBuffer();
+  
+  for (int i = 0; i < subtitles.length; i++) {
+    final subtitle = subtitles[i];
+    buffer.writeln(i + 1);
+    buffer.writeln('${_formatTimeForExport(subtitle.startMs)} --> ${_formatTimeForExport(subtitle.endMs)}');
+    buffer.writeln(subtitle.text);
+    buffer.writeln();
+  }
+  
+  return buffer.toString();
+}
+
+String _formatTimeForExport(int ms) {
+  final duration = Duration(milliseconds: ms);
+  final hours = duration.inHours.toString().padLeft(2, '0');
+  final minutes = (duration.inMinutes % 60).toString().padLeft(2, '0');
+  final seconds = (duration.inSeconds % 60).toString().padLeft(2, '0');
+  final milliseconds = (ms % 1000).toString().padLeft(3, '0');
+  return '$hours:$minutes:$seconds,$milliseconds';
+}

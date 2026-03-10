@@ -100,6 +100,7 @@ class PlayerToolbar extends StatelessWidget {
   final VoidCallback onSubtitleTap;
   final VoidCallback onFullscreenTap;
   final VoidCallback onSubtitleEditTap;
+  final VoidCallback? onExportSubtitleTap;
 
   const PlayerToolbar({
     super.key,
@@ -113,6 +114,7 @@ class PlayerToolbar extends StatelessWidget {
     required this.onSubtitleTap,
     required this.onFullscreenTap,
     required this.onSubtitleEditTap,
+    this.onExportSubtitleTap,
   });
 
   @override
@@ -154,6 +156,13 @@ class PlayerToolbar extends StatelessWidget {
               onPressed: onSubtitleTap,
             ),
             const Spacer(),
+            if (hasSubtitle && onExportSubtitleTap != null)
+              IconButton(
+                icon: Icon(Icons.upload_file, color: AppTheme.textColor),
+                onPressed: onExportSubtitleTap,
+                tooltip: '导出字幕',
+              ),
+            if (hasSubtitle && onExportSubtitleTap != null) const Spacer(),
             isEditingSubtitle
               ? IconButton(
                   icon: const Icon(Icons.edit, color: AppTheme.textColor),
