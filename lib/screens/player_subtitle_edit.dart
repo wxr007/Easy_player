@@ -212,48 +212,75 @@ class _SubtitleEditBottomSheetState extends State<SubtitleEditBottomSheet> {
                         style: TextStyle(fontSize: 14, color: AppTheme.textColor.withOpacity(0.8)),
                       ),
                       const SizedBox(height: 6),
-                      TextField(
-                        controller: _startController,
-                        style: TextStyle(color: AppTheme.textColor, fontSize: 13),
-                        inputFormatters: [
-                          FilteringTextInputFormatter.allow(RegExp(r'[\d:.]')),
-                        ],
-                        decoration: InputDecoration(
-                          hintText: '00:00:00.000',
-                          hintStyle: TextStyle(color: AppTheme.textColor.withOpacity(0.5), fontSize: 13),
-                          isDense: true,
-                          filled: true,
-                          fillColor: AppTheme.backgroundColor,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide.none,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
+                      // 时间输入框带箭头按钮
                       Row(
                         children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: () => _adjustTime(_startController, -50),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: AppTheme.textColor,
-                                side: BorderSide(color: AppTheme.textColor.withOpacity(0.3)),
-                                padding: const EdgeInsets.symmetric(vertical: 4),
+                          // 左箭头按钮 (减少时间)
+                          SizedBox(
+                            width: 32,
+                            height: 38,
+                            child: GestureDetector(
+                              onTap: () => _adjustTime(_startController, -50),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                    color: AppTheme.textColor.withOpacity(0.3),
+                                    width: 1,
+                                  ),
+                                  borderRadius: BorderRadius.only(
+                                    topLeft: Radius.circular(8),
+                                    bottomLeft: Radius.circular(8),
+                                  ),
+                                ),
+                                child: Center(
+                                  child: Icon(Icons.arrow_left, size: 24, color: AppTheme.textColor),
+                                ),
                               ),
-                              child: const Text('-50ms', style: TextStyle(fontSize: 12)),
                             ),
                           ),
-                          const SizedBox(width: 6),
+                          // 时间输入框
                           Expanded(
-                            child: OutlinedButton(
-                              onPressed: () => _adjustTime(_startController, 50),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: AppTheme.textColor,
-                                side: BorderSide(color: AppTheme.textColor.withOpacity(0.3)),
-                                padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: TextField(
+                              controller: _startController,
+                              style: TextStyle(color: AppTheme.textColor, fontSize: 13),
+                              inputFormatters: [
+                                FilteringTextInputFormatter.allow(RegExp(r'[\d:.]')),
+                              ],
+                              decoration: InputDecoration(
+                                hintText: '00:00:00.000',
+                                hintStyle: TextStyle(color: AppTheme.textColor.withOpacity(0.5), fontSize: 13),
+                                isDense: true,
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                filled: true,
+                                fillColor: AppTheme.backgroundColor,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.zero,
+                                  borderSide: BorderSide.none,
+                                ),
                               ),
-                              child: const Text('+50ms', style: TextStyle(fontSize: 12)),
+                            ),
+                          ),
+                          // 右箭头按钮 (增加时间)
+                          SizedBox(
+                            width: 32,
+                            height: 38,
+                            child: GestureDetector(
+                              onTap: () => _adjustTime(_startController, 50),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                    color: AppTheme.textColor.withOpacity(0.3),
+                                    width: 1,
+                                  ),
+                                  borderRadius: BorderRadius.only(
+                                    topRight: Radius.circular(8),
+                                    bottomRight: Radius.circular(8),
+                                  ),
+                                ),
+                                child: Center(
+                                  child: Icon(Icons.arrow_right, size: 24, color: AppTheme.textColor),
+                                ),
+                              ),
                             ),
                           ),
                         ],
@@ -271,48 +298,75 @@ class _SubtitleEditBottomSheetState extends State<SubtitleEditBottomSheet> {
                         style: TextStyle(fontSize: 14, color: AppTheme.textColor.withOpacity(0.8)),
                       ),
                       const SizedBox(height: 6),
-                      TextField(
-                        controller: _endController,
-                        style: TextStyle(color: AppTheme.textColor, fontSize: 13),
-                        inputFormatters: [
-                          FilteringTextInputFormatter.allow(RegExp(r'[\d:.]')),
-                        ],
-                        decoration: InputDecoration(
-                          hintText: '00:00:00.000',
-                          hintStyle: TextStyle(color: AppTheme.textColor.withOpacity(0.5), fontSize: 13),
-                          isDense: true,
-                          filled: true,
-                          fillColor: AppTheme.backgroundColor,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide.none,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
+                      // 时间输入框带箭头按钮
                       Row(
                         children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: () => _adjustTime(_endController, -50),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: AppTheme.textColor,
-                                side: BorderSide(color: AppTheme.textColor.withOpacity(0.3)),
-                                padding: const EdgeInsets.symmetric(vertical: 4),
+                          // 左箭头按钮 (减少时间)
+                          SizedBox(
+                            width: 32,
+                            height: 38,
+                            child: GestureDetector(
+                              onTap: () => _adjustTime(_endController, -50),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                    color: AppTheme.textColor.withOpacity(0.3),
+                                    width: 1,
+                                  ),
+                                  borderRadius: BorderRadius.only(
+                                    topLeft: Radius.circular(8),
+                                    bottomLeft: Radius.circular(8),
+                                  ),
+                                ),
+                                child: Center(
+                                  child: Icon(Icons.arrow_left, size: 24, color: AppTheme.textColor),
+                                ),
                               ),
-                              child: const Text('-50ms', style: TextStyle(fontSize: 12)),
                             ),
                           ),
-                          const SizedBox(width: 6),
+                          // 时间输入框
                           Expanded(
-                            child: OutlinedButton(
-                              onPressed: () => _adjustTime(_endController, 50),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: AppTheme.textColor,
-                                side: BorderSide(color: AppTheme.textColor.withOpacity(0.3)),
-                                padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: TextField(
+                              controller: _endController,
+                              style: TextStyle(color: AppTheme.textColor, fontSize: 13),
+                              inputFormatters: [
+                                FilteringTextInputFormatter.allow(RegExp(r'[\d:.]')),
+                              ],
+                              decoration: InputDecoration(
+                                hintText: '00:00:00.000',
+                                hintStyle: TextStyle(color: AppTheme.textColor.withOpacity(0.5), fontSize: 13),
+                                isDense: true,
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                filled: true,
+                                fillColor: AppTheme.backgroundColor,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.zero,
+                                  borderSide: BorderSide.none,
+                                ),
                               ),
-                              child: const Text('+50ms', style: TextStyle(fontSize: 12)),
+                            ),
+                          ),
+                          // 右箭头按钮 (增加时间)
+                          SizedBox(
+                            width: 32,
+                            height: 38,
+                            child: GestureDetector(
+                              onTap: () => _adjustTime(_endController, 50),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                    color: AppTheme.textColor.withOpacity(0.3),
+                                    width: 1,
+                                  ),
+                                  borderRadius: BorderRadius.only(
+                                    topRight: Radius.circular(8),
+                                    bottomRight: Radius.circular(8),
+                                  ),
+                                ),
+                                child: Center(
+                                  child: Icon(Icons.arrow_right, size: 24, color: AppTheme.textColor),
+                                ),
+                              ),
                             ),
                           ),
                         ],
