@@ -117,6 +117,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final isLandscape = size.width > size.height;
+    
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
       appBar: AppBar(
@@ -124,6 +127,7 @@ class _HomeScreenState extends State<HomeScreen> {
         foregroundColor: AppTheme.textColor,
         title: const Text('Easy Player'),
         centerTitle: true,
+        toolbarHeight: isLandscape ? 32 : 56,
       ),
       body: Consumer<VideoStore>(
         builder: (context, store, child) {
@@ -131,11 +135,11 @@ class _HomeScreenState extends State<HomeScreen> {
           
           return GridView.builder(
             padding: const EdgeInsets.all(10),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              childAspectRatio: 1.2,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: isLandscape ? 4 : 2,
+              childAspectRatio: isLandscape ? 1.5 : 1.2,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
             ),
             itemCount: videos.length + 1,
             itemBuilder: (context, index) {

@@ -80,8 +80,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
   @override
   void initState() {
     super.initState();
-    // Set system UI mode to edgeToEdge at the start
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     _subtitleScrollController = ScrollController();
     _initializePlayer();
     _loadExistingSubtitles();
@@ -676,7 +674,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   Future<void> _enterFullScreen() async {
     // Hide system UI
-    // await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     
     // Determine orientation based on aspect ratio
     // landscape if aspectRatio > 1.0 (width > height), portrait if < 1.0
@@ -720,6 +718,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
         _syncSubtitleToVideoPosition(forceScroll: true);
       }
     });
+
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   }
 
   Widget _buildFullScreenPlayer() {
@@ -862,23 +862,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
       appBar: AppBar(
         backgroundColor: AppTheme.primaryColor,
         foregroundColor: AppTheme.textColor,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              widget.video.name,
-              style: const TextStyle(fontSize: 14),
-            ),
-            Text(
-              '${_formatDuration(_currentPosition)} / ${_formatDuration(widget.video.duration)}',
-              style: TextStyle(
-                fontSize: 11,
-                color: AppTheme.textColor.withOpacity(0.8),
-              ),
-            ),
-          ],
+        title: Text(
+          widget.video.name,
+          style: const TextStyle(fontSize: 14),
         ),
-        toolbarHeight: 60,
+        toolbarHeight: isLandscape ? 40 : 60,
       ),
       body: isLandscape
           ? Row(
