@@ -148,21 +148,24 @@ class PlayerToolbar extends StatelessWidget {
               onPressed: onPlayPauseTap,
             ),
             const Spacer(),
-            IconButton(
-              icon: Icon(
-                hasSubtitle ? Icons.subtitles : Icons.subtitles_off,
-                color: AppTheme.textColor,
+            // 正常模式显示添加字幕按钮，编辑模式隐藏
+            if (!isEditingSubtitle)
+              IconButton(
+                icon: Icon(
+                  hasSubtitle ? Icons.subtitles : Icons.subtitles_off,
+                  color: AppTheme.textColor,
+                ),
+                onPressed: onSubtitleTap,
               ),
-              onPressed: onSubtitleTap,
-            ),
-            const Spacer(),
-            if (hasSubtitle && onExportSubtitleTap != null)
+            if (!isEditingSubtitle) const Spacer(),
+            // 编辑模式显示导出字幕按钮，正常模式隐藏
+            if (isEditingSubtitle && hasSubtitle && onExportSubtitleTap != null)
               IconButton(
                 icon: Icon(Icons.upload_file, color: AppTheme.textColor),
                 onPressed: onExportSubtitleTap,
                 tooltip: '导出字幕',
               ),
-            if (hasSubtitle && onExportSubtitleTap != null) const Spacer(),
+            if (isEditingSubtitle && hasSubtitle && onExportSubtitleTap != null) const Spacer(),
             isEditingSubtitle
               ? IconButton(
                   icon: const Icon(Icons.edit, color: AppTheme.textColor),
