@@ -674,8 +674,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   Future<void> _enterFullScreen() async {
     // Hide system UI
-    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-    
     // Determine orientation based on aspect ratio
     // landscape if aspectRatio > 1.0 (width > height), portrait if < 1.0
     if (_videoAspectRatio > 1.2) {
@@ -718,8 +716,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
         _syncSubtitleToVideoPosition(forceScroll: true);
       }
     });
-
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   }
 
   Widget _buildFullScreenPlayer() {
