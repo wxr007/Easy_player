@@ -501,80 +501,60 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   void _showNormalSettingsMenu(BuildContext context) {
-    // 确保使用根上下文来显示全屏弹窗
-    final rootContext = Navigator.of(context).context;
-    showModalBottomSheet(
-      context: rootContext,
-      backgroundColor: Colors.transparent,
-      builder: (BuildContext context) {
-        return Container(
-          decoration: BoxDecoration(
-            color: AppTheme.cardColor,
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(16),
-              topRight: Radius.circular(16),
-            ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+    // 显示弹出式菜单
+    final RenderBox button = context.findRenderObject() as RenderBox;
+    final Offset position = button.localToGlobal(Offset.zero);
+    final Size buttonSize = button.size;
+    
+    // 计算菜单位置，确保菜单底部与按钮顶部对齐
+    // 这样菜单就不会遮住工具条
+    showMenu(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        position.dx, // 与工具条左侧对齐
+        position.dy - 160, // 菜单顶部位置（预留足够空间）
+        position.dx + 200, // 菜单宽度
+        position.dy, // 菜单底部与按钮顶部对齐
+      ),
+      items: [
+        PopupMenuItem(
+          enabled: false,
+          child: Row(
             children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                child: Text(
-                  '设置',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textColor,
-                  ),
+              Icon(Icons.volume_up, color: AppTheme.textColor),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '选择音轨',
+                      style: TextStyle(color: AppTheme.textColor),
+                    ),
+                    Text(
+                      '该功能需要系统支持',
+                      style: TextStyle(
+                        color: AppTheme.textColor.withOpacity(0.6),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              ListTile(
-                leading: Icon(Icons.volume_up, color: AppTheme.textColor),
-                title: Text(
-                  '选择音轨',
-                  style: TextStyle(color: AppTheme.textColor),
-                ),
-                subtitle: Text(
-                  '该功能需要系统支持',
-                  style: TextStyle(
-                    color: AppTheme.textColor.withOpacity(0.6),
-                    fontSize: 12,
-                  ),
-                ),
-                enabled: false,
-                onTap: null,
-              ),
-              ListTile(
-                leading: Icon(Icons.closed_caption, color: AppTheme.textColor),
-                title: Text(
-                  '字幕修改',
-                  style: TextStyle(color: AppTheme.textColor),
-                ),
-                trailing: Switch(
-                  value: _subtitleEditMode,
-                  onChanged: (val) {
-                    setState(() {
-                      _subtitleEditMode = val;
-                    });
-                    Navigator.pop(context);
-                    if (_subtitleEditMode) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('字幕编辑模式已开启，点击字幕列表中的字幕项进行编辑'), duration: Duration(seconds: 3)),
-                      );
-                      if(_videoPlayerController?.value.isPlaying == true){
-                        _videoPlayerController!.pause();
-                      }
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('字幕编辑模式已关闭'), duration: Duration(seconds: 2)),
-                      );
-                    }
-                  },
-                ),
-                onTap: () {
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          child: Row(
+            children: [
+              Icon(Icons.closed_caption, color: AppTheme.textColor),
+              const SizedBox(width: 12),
+              Expanded(child: Text('字幕修改', style: TextStyle(color: AppTheme.textColor))),
+              Switch(
+                value: _subtitleEditMode,
+                onChanged: (val) {
                   setState(() {
-                    _subtitleEditMode = !_subtitleEditMode;
+                    _subtitleEditMode = val;
                   });
                   Navigator.pop(context);
                   if (_subtitleEditMode) {
@@ -591,22 +571,27 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   }
                 },
               ),
-              ListTile(
-                leading: Icon(Icons.info_outline, color: AppTheme.textColor),
-                title: Text(
-                  '视频信息',
-                  style: TextStyle(color: AppTheme.textColor),
-                ),
-                onTap: () {
-                  Navigator.pop(context);
-                  _showVideoInfo(context);
-                },
-              ),
-              const SizedBox(height: 16),
             ],
           ),
-        );
-      },
+        ),
+        PopupMenuItem(
+          child: Row(
+            children: [
+              Icon(Icons.info_outline, color: AppTheme.textColor),
+              const SizedBox(width: 12),
+              Text('视频信息', style: TextStyle(color: AppTheme.textColor)),
+            ],
+          ),
+          onTap: () {
+            _showVideoInfo(context);
+          },
+        ),
+      ],
+      elevation: 8.0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+      ),
+      color: AppTheme.cardColor,
     );
   }
 
@@ -1012,8 +997,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
       isPlaying: _videoPlayerController?.value.isPlaying ?? false,
       hasSubtitle: widget.video.subtitlePath != null,
       isEditingSubtitle:_subtitleEditMode,
-      onSettingsTap: () {
-        _showSettingsMenu(context, isFullScreen: false);
+      onSettingsTap: (BuildContext toolbarContext) {
+        _showNormalSettingsMenu(toolbarContext);
       },
       onTargetModeTap: () {
         setState(() {

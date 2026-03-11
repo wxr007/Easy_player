@@ -94,7 +94,7 @@ class PlayerToolbar extends StatelessWidget {
   final bool isPlaying;
   final bool hasSubtitle;
   final bool isEditingSubtitle;
-  final VoidCallback onSettingsTap;
+  final Function(BuildContext) onSettingsTap;
   final VoidCallback onTargetModeTap;
   final VoidCallback onPlayPauseTap;
   final VoidCallback onSubtitleTap;
@@ -129,7 +129,7 @@ class PlayerToolbar extends StatelessWidget {
           children: [
             IconButton(
               icon: Icon(Icons.settings, color: AppTheme.textColor),
-              onPressed: onSettingsTap,
+              onPressed: () => onSettingsTap(context),
             ),
             const Spacer(),
             IconButton(
