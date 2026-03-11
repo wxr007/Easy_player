@@ -126,11 +126,17 @@ class _SubtitleEditBottomSheetState extends State<SubtitleEditBottomSheet> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(10),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+      padding: EdgeInsets.only(
+        left: 10,
+        right: 10,
+        top: 10,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 10,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             // 标题栏和按钮
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -397,6 +403,7 @@ class _SubtitleEditBottomSheetState extends State<SubtitleEditBottomSheet> {
               ),
           ],
         ),
+      ),
     );
   }
 }
