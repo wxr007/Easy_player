@@ -1066,6 +1066,73 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
+  Future<void> _mergeSubtitles(int index) async {
+    if (index < 0 || index >= _subtitles.length - 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('没有下一条字幕可合并')),
+      );
+      return;
+    }
+
+    // 显示二次确认对话框
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: AppTheme.cardColor,
+          title: Text('确认合并', style: TextStyle(color: AppTheme.textColor)),
+          content: Text('确定要将当前字幕与下一条字幕合并吗？', style: TextStyle(color: AppTheme.textColor)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('取消', style: TextStyle(color: AppTheme.textColor.withOpacity(0.7))),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _performMerge(index);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryColor,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('确认'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _performMerge(int index) {
+    if (index < 0 || index >= _subtitles.length - 1) return;
+
+    final currentSubtitle = _subtitles[index];
+    final nextSubtitle = _subtitles[index + 1];
+
+    // 创建合并后的字幕
+    final mergedSubtitle = SubtitleItem(
+      startMs: currentSubtitle.startMs,
+      endMs: nextSubtitle.endMs,
+      text: '${currentSubtitle.text}\n${nextSubtitle.text}',
+    );
+
+    // 更新字幕列表
+    setState(() {
+      _subtitles.removeAt(index + 1);
+      _subtitles[index] = mergedSubtitle;
+      
+      // 更新字幕键列表
+      if (_subtitleKeys.length > index + 1) {
+        _subtitleKeys.removeAt(index + 1);
+      }
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('字幕已合并')),
+    );
+  }
+
   Future<void> _exportSubtitles() async {
     if (_subtitles.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1197,6 +1264,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
         subtitleKeys: _subtitleKeys,
         currentSubtitleIndex: _currentSubtitleIndex,
         isPlaying: _videoPlayerController?.value.isPlaying ?? false,
+        isEditingSubtitle: _subtitleEditMode,
         onSubtitleTap: (subtitle) async {
           if (_videoPlayerController != null) {
             await _videoPlayerController!.seekTo(Duration(milliseconds: subtitle.startMs));
@@ -1212,6 +1280,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
           _togglePlayPause();
         },
         onAddSubtitleTap: _pickSubtitle,
+        onMergeSubtitleTap: _mergeSubtitles,
         formatDuration: _formatMs,
       );
     } else {

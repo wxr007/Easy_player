@@ -9,9 +9,11 @@ class SubtitleListWidget extends StatelessWidget {
   final List<GlobalKey> subtitleKeys;
   final int currentSubtitleIndex;
   final bool isPlaying;
+  final bool isEditingSubtitle;
   final Future<void> Function(SubtitleItem subtitle) onSubtitleTap;
   final VoidCallback onPlayPauseTap;
   final Future<void> Function() onAddSubtitleTap;
+  final Future<void> Function(int) onMergeSubtitleTap;
   final String Function(int) formatDuration;
 
   const SubtitleListWidget({
@@ -22,9 +24,11 @@ class SubtitleListWidget extends StatelessWidget {
     required this.subtitleKeys,
     required this.currentSubtitleIndex,
     required this.isPlaying,
+    required this.isEditingSubtitle,
     required this.onSubtitleTap,
     required this.onPlayPauseTap,
     required this.onAddSubtitleTap,
+    required this.onMergeSubtitleTap,
     required this.formatDuration,
   });
 
@@ -125,9 +129,13 @@ class SubtitleListWidget extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.only(left: 8),
                       child: GestureDetector(
-                        onTap: onPlayPauseTap,
+                        onTap: isEditingSubtitle 
+                            ? () => onMergeSubtitleTap(index).ignore()
+                            : onPlayPauseTap,
                         child: Icon(
-                          isPlaying ? Icons.pause_circle_outline : Icons.play_circle_outline,
+                          isEditingSubtitle 
+                              ? Icons.download
+                              : (isPlaying ? Icons.pause_circle_outline : Icons.play_circle_outline),
                           color: AppTheme.textColor,
                           size: 28,
                         ),
